@@ -29,13 +29,15 @@ hxlmap.setup = function (html_id) {
  */
 hxlmap.addHXL = function(hxl_url) {
     hxl.load(hxl_url, function (source) {
+        var cluster = L.markerClusterGroup();
         source.forEach(function (row) {
             var lat = row.get("#geo+lat");
             var lon = row.get("#geo+lon");
             var label = row.get("#loc+name");
 
-            var marker = L.marker([lat, lon]).addTo(hxlmap.map);
+            var marker = L.marker([lat, lon]);
             marker.bindPopup(label);
+            cluster.addLayer(marker);
 
             if (hxlmap.bounds) {
                 hxlmap.bounds.extend([lat, lon]);
@@ -43,6 +45,7 @@ hxlmap.addHXL = function(hxl_url) {
                 hxlmap.bounds = L.latLngBounds([lat, lon], [lat, lon]);
             }
         });
+        hxlmap.map.addLayer(cluster);
         if (hxlmap.bounds) {
             hxlmap.map.fitBounds(hxlmap.bounds);
         }
