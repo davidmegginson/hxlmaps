@@ -16,6 +16,21 @@ var hxlmap = {
     }
 };
 
+
+/**
+ * Cache of P-code files already loaded.
+ */
+hxlmap.pcodeCache = {};
+
+
+/**
+ * Munge URL to use the HXL Proxy
+ */
+hxlmap.mungeUrl = function(url) {
+    return "https://proxy.hxlstandard.org/data.csv?url=" + encodeURIComponent(url);
+};
+
+
 /**
  * Set up a HXL map
  */
@@ -24,31 +39,52 @@ hxlmap.setup = function (html_id) {
     L.tileLayer(hxlmap.tiles.url, hxlmap.tiles.properties).addTo(hxlmap.map);
 };
 
+
 /**
  * Add a layer to a HXL map
  */
-hxlmap.addHXL = function(hxl_url) {
-    hxl.load(hxl_url, function (source) {
-        var cluster = L.markerClusterGroup();
-        source.forEach(function (row) {
-            var lat = row.get("#geo+lat");
-            var lon = row.get("#geo+lon");
-            var label = row.get("#loc+name");
-
-            var marker = L.marker([lat, lon]);
-            marker.bindPopup(label);
-            cluster.addLayer(marker);
-
-            if (hxlmap.bounds) {
-                hxlmap.bounds.extend([lat, lon]);
-            } else {
-                hxlmap.bounds = L.latLngBounds([lat, lon], [lat, lon]);
-            }
-        });
-        hxlmap.map.addLayer(cluster);
-        if (hxlmap.bounds) {
-            hxlmap.map.fitBounds(hxlmap.bounds);
+hxlmap.addLayer = function(layer) {
+    console.log(layer);
+    hxl.load(hxlmap.mungeUrl(layer.url), function (source) {
+        if (layer.type == "points") {
+            hxlmap.loadPoints(layer, source);
+        } else if (layer.type == "pcodes") {
+            hxlmap.loadAreas(layer, source);
+        } else {
+            console.log("skipping", layer);
         }
     });
 };
 
+
+/**
+ * Load points from a HXL data source
+ */
+hxlmap.loadPoints = function(layer, source) {
+    var cluster = L.markerClusterGroup();
+    source.forEach(function (row) {
+        var lat = row.get("#geo+lat");
+        var lon = row.get("#geo+lon");
+        var label = row.get("#loc+name");
+
+        var marker = L.marker([lat, lon]);
+        marker.bindPopup(label);
+        cluster.addLayer(marker);
+
+        if (hxlmap.bounds) {
+            hxlmap.bounds.extend([lat, lon]);
+        } else {
+            hxlmap.bounds = L.latLngBounds([lat, lon], [lat, lon]);
+        }
+    });
+    hxlmap.map.addLayer(cluster);
+    if (hxlmap.bounds) {
+        hxlmap.map.fitBounds(hxlmap.bounds);
+    }
+};
+
+hxlmap.loadAreas = function(layer, source) {
+    console.log("Loading p-codes", layer);
+    source.count_rows("#adm1");
+    // Hard code admin1 for now
+};
