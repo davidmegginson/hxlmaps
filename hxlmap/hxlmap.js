@@ -84,7 +84,8 @@ hxlmap.loadPoints = function(layer, source) {
 };
 
 hxlmap.loadAreas = function(layer, source) {
-    console.log("Loading p-codes", layer);
-    source.count_rows("#adm1");
-    // Hard code admin1 for now
+    var report = source.count("#adm1");
+    report.forEach(function (row) {
+        console.log(row.values.toString());
+    });
 };
