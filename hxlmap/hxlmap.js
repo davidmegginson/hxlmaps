@@ -103,17 +103,17 @@ hxlmap.Map.prototype.constructor = hxlmap.Map;
  * The critical properties in a layer definition are "url" (the URL of the HXL data)
  * and "type" ("points" or "areas"). For "areas", the "countries" property is also
  * required.
- * @param layer: a map of properties defining the layer.
+ * @param config: a map of properties defining the layer.
  */
-hxlmap.Map.prototype.addLayer = function(layer) {
+hxlmap.Map.prototype.addLayer = function(config) {
     var map = this;
-    hxl.load(hxlmap.mungeUrl(layer.url), function (source) {
-        if (layer.type == "points") {
-            map.loadPoints(layer, source);
-        } else if (layer.type == "areas") {
-            map.loadAreas(layer, source);
+    hxl.load(hxlmap.mungeUrl(config.url), function (source) {
+        if (config.type == "points") {
+            map.loadPoints(config, source);
+        } else if (config.type == "areas") {
+            map.loadAreas(config, source);
         } else {
-            console.error("Skipping layer with unknown type", layer.type);
+            console.error("Skipping layer with unknown type", config.type);
         }
     });
 };
@@ -121,10 +121,10 @@ hxlmap.Map.prototype.addLayer = function(layer) {
 /**
  * Load points from a HXL data source
  */
-hxlmap.Map.prototype.loadPoints = function(layer, source) {
+hxlmap.Map.prototype.loadPoints = function(config, source) {
     var map = this;
     var cluster = null;
-    if (layer.cluster) {
+    if (config.cluster) {
         cluster = L.markerClusterGroup();
     } else {
         cluster = L.layerGroup();
@@ -147,10 +147,10 @@ hxlmap.Map.prototype.loadPoints = function(layer, source) {
 /**
  * Load areas into the map
  */
-hxlmap.Map.prototype.loadAreas = function(layer, source) {
+hxlmap.Map.prototype.loadAreas = function(config, source) {
     // FIXME: make level configurable
     var map = this;
-    hxlmap.loadItos(layer.country, 2, function (features) {
+    hxlmap.loadItos(config.country, 2, function (features) {
         var report = source.count("#adm1");
         var min = report.getMin("#meta+count");
         var max = report.getMax("#meta+count");
@@ -162,7 +162,7 @@ hxlmap.Map.prototype.loadAreas = function(layer, source) {
                 var feature = features[pcode];
                 if (feature) {
                     feature.forEach(function(contour) {
-                        L.polygon(contour, {color: "red"}).addTo(map.map);
+                        L.polygon(contour).addTo(map.map);
                         map.extendBounds(contour);
                     });
                 } else {
