@@ -30,7 +30,6 @@ hxlmap.mungeUrl = function(url) {
     return "https://proxy.hxlstandard.org/data.csv?url=" + encodeURIComponent(url);
 };
 
-
 /**
  * Set up a HXL map
  */
@@ -44,7 +43,6 @@ hxlmap.setup = function (html_id) {
  * Add a layer to a HXL map
  */
 hxlmap.addLayer = function(layer) {
-    console.log(layer);
     hxl.load(hxlmap.mungeUrl(layer.url), function (source) {
         if (layer.type == "points") {
             hxlmap.loadPoints(layer, source);
@@ -88,6 +86,22 @@ hxlmap.loadPoints = function(layer, source) {
  * Load geometry from iTOS
  */
 hxlmap.loadItos = function(country, level, callback) {
+
+    /**
+     * iTOS reverse lat/lon
+     */
+    function fixlatlon(feature) {
+        for (var i = 0; i < feature.length; i++) {
+            var contour = feature[i];
+            for (var j = 0; j < contour.length; j++) {
+                var tmp = contour[j][0];
+                contour[j][0] = contour[j][1];
+                contour[j][1] = tmp;
+            }
+        }
+        return feature;
+    }
+    
     if (hxlmap.pcodeCache[country]) {
         callback(hxl.pcodeCache[country]);
     } else {
@@ -97,7 +111,7 @@ hxlmap.loadItos = function(country, level, callback) {
         jQuery.getJSON(url, function(data) {
             var features = {};
             data.features.forEach(function(feature) {
-                features[feature.attributes.admin1Pcode] = feature.geometry.rings;
+                features[feature.attributes.admin1Pcode] = fixlatlon(feature.geometry.rings);
             });
             hxlmap.pcodeCache[country] = features;
             callback(features);
@@ -115,7 +129,21 @@ hxlmap.loadAreas = function(layer, source) {
         var max = report.getMax("#meta+count");
         console.log(min, max);
         report.forEach(function (row) {
-            console.log(row.values.toString());
+            var pcode = row.get("#adm1+code");
+            if (pcode) {
+                // fixme temporary
+                pcode = pcode.replace("MLI", "ML");
+                var feature = features[pcode];
+                if (feature) {
+                    feature.forEach(function(contour) {
+                        L.polygon(contour, {color: "red"}).addTo(hxlmap.map);
+                    });
+                } else {
+                    console.log("No feature found for", pcode);
+                }
+            } else {
+                console.log("No pcode in row");
+            }
         });
     });
 };
