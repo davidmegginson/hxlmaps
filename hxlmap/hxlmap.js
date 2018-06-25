@@ -18,9 +18,9 @@ var hxlmap = {
 
 
 /**
- * Cache of P-code files already loaded.
+ * Cache of areas already loaded (key is ISO3 country code).
  */
-hxlmap.pcodeCache = {};
+hxlmap.areaCache = {};
 
 
 /**
@@ -41,15 +41,19 @@ hxlmap.setup = function (html_id) {
 
 /**
  * Add a layer to a HXL map
+ * The critical properties in a layer definition are "url" (the URL of the HXL data)
+ * and "type" ("points" or "areas"). For "areas", the "countries" property is also
+ * required.
+ * @param layer: a map of properties defining the layer.
  */
 hxlmap.addLayer = function(layer) {
     hxl.load(hxlmap.mungeUrl(layer.url), function (source) {
         if (layer.type == "points") {
             hxlmap.loadPoints(layer, source);
-        } else if (layer.type == "pcodes") {
+        } else if (layer.type == "areas") {
             hxlmap.loadAreas(layer, source);
         } else {
-            console.log("skipping", layer);
+            console.info("skipping", layer);
         }
     });
 };
@@ -84,11 +88,18 @@ hxlmap.loadPoints = function(layer, source) {
 
 /**
  * Load geometry from iTOS
+ *
+ * Will retrieve from the cache if available; otherwise, will load from iTOS.
+ * The function transforms the data into a map with pcodes as the keys. The values are
+ * lists of contours, which are lists of tuples, each of which is a lat/lon point.
+ * @param country: the ISO3 code for the country
+ * @param level: an integer for the level to load (1=country, 2=admin1, 3=admin2, etc)
+ * @param callback: the callback function to receive the iTOS data once loaded. 
  */
 hxlmap.loadItos = function(country, level, callback) {
 
     /**
-     * iTOS reverse lat/lon
+     * iTOS reverses the lat/lon. Blech.
      */
     function fixlatlon(feature) {
         for (var i = 0; i < feature.length; i++) {
@@ -102,19 +113,26 @@ hxlmap.loadItos = function(country, level, callback) {
         return feature;
     }
     
-    if (hxlmap.pcodeCache[country]) {
-        callback(hxl.pcodeCache[country]);
+    if (hxlmap.areaCache[country]) {
+        // if we've already loaded this country before, then we're done!!
+        callback(hxl.areaCache[country]);
     } else {
+        // need to load from iTOS and preprocess
         var url = "http://gistmaps.itos.uga.edu/arcgis/rest/services/COD_External/{{country}}_pcode/MapServer/{{level}}/query?where=1%3D1&outFields=*&f=pjson"
         url = url.replace("{{country}}", encodeURIComponent(country.toUpperCase()));
         url = url.replace("{{level}}", encodeURIComponent(level));
-        jQuery.getJSON(url, function(data) {
+        var promise = jQuery.getJSON(url, function(data) {
             var features = {};
+            // add each feature to the map, with the pcode as key
+            // FIXME hard-coded to the admin1Pcode
             data.features.forEach(function(feature) {
                 features[feature.attributes.admin1Pcode] = fixlatlon(feature.geometry.rings);
             });
-            hxlmap.pcodeCache[country] = features;
+            hxlmap.areaCache[country] = features;
             callback(features);
+        });
+        promise.fail(function() {
+            console.error("Failed to load areas for country", country);
         });
     }
 };
@@ -127,7 +145,6 @@ hxlmap.loadAreas = function(layer, source) {
         var report = source.count("#adm1");
         var min = report.getMin("#meta+count");
         var max = report.getMax("#meta+count");
-        console.log(min, max);
         report.forEach(function (row) {
             var pcode = row.get("#adm1+code");
             if (pcode) {
@@ -139,10 +156,10 @@ hxlmap.loadAreas = function(layer, source) {
                         L.polygon(contour, {color: "red"}).addTo(hxlmap.map);
                     });
                 } else {
-                    console.log("No feature found for", pcode);
+                    console.error("No feature found for", pcode);
                 }
             } else {
-                console.log("No pcode in row");
+                console.info("No pcode in row");
             }
         });
     });
