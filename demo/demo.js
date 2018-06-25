@@ -1,4 +1,4 @@
-var layers = [
+var demo_layers = [
     {
         url: "http://ourairports.com/countries/ML/airports.hxl",
         type: "points"
@@ -10,11 +10,11 @@ var layers = [
     }
 ];
 
-hxlmap.setup("mapid");
+var demo_map = new hxlmap.Map("mapid");
 
-layers.forEach(function(layer) {
+demo_layers.forEach(function(layer) {
     console.log("Adding", layer.url);
-    hxlmap.addLayer(layer);
+    demo_map.addLayer(layer);
 });
 
 

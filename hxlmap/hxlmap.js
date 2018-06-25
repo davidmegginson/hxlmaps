@@ -1,9 +1,11 @@
+////////////////////////////////////////////////////////////////////////
+// hxlmap static properties and methods
+////////////////////////////////////////////////////////////////////////
+
 /**
- * HXL map core object
+ * Basic static hxlmap properties
  */
 var hxlmap = {
-    map: null,
-    bounds: null,
     tiles: {
         url: 'https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token=pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXVycTA2emYycXBndHRqcmZ3N3gifQ.rJcFIG214AriISLbB6B5aw',
         properties: {
@@ -13,81 +15,21 @@ var hxlmap = {
                 'Imagery © <a href="https://www.mapbox.com/">Mapbox</a>',
             id: 'mapbox.streets'
         }
-    }
+    },
+    areaCache: {}
 };
 
 
 /**
- * Cache of areas already loaded (key is ISO3 country code).
- */
-hxlmap.areaCache = {};
-
-
-/**
- * Munge URL to use the HXL Proxy
+ * Static method: munge URL to use the HXL Proxy
  */
 hxlmap.mungeUrl = function(url) {
     return "https://proxy.hxlstandard.org/data.csv?url=" + encodeURIComponent(url);
 };
 
-/**
- * Set up a HXL map
- */
-hxlmap.setup = function (html_id) {
-    hxlmap.map = L.map(html_id).setView([0, 0], 6);
-    L.tileLayer(hxlmap.tiles.url, hxlmap.tiles.properties).addTo(hxlmap.map);
-};
-
 
 /**
- * Add a layer to a HXL map
- * The critical properties in a layer definition are "url" (the URL of the HXL data)
- * and "type" ("points" or "areas"). For "areas", the "countries" property is also
- * required.
- * @param layer: a map of properties defining the layer.
- */
-hxlmap.addLayer = function(layer) {
-    hxl.load(hxlmap.mungeUrl(layer.url), function (source) {
-        if (layer.type == "points") {
-            hxlmap.loadPoints(layer, source);
-        } else if (layer.type == "areas") {
-            hxlmap.loadAreas(layer, source);
-        } else {
-            console.info("skipping", layer);
-        }
-    });
-};
-
-
-/**
- * Load points from a HXL data source
- */
-hxlmap.loadPoints = function(layer, source) {
-    var cluster = L.markerClusterGroup();
-    source.forEach(function (row) {
-        var lat = row.get("#geo+lat");
-        var lon = row.get("#geo+lon");
-        var label = row.get("#loc+name");
-
-        var marker = L.marker([lat, lon]);
-        marker.bindPopup(label);
-        cluster.addLayer(marker);
-
-        if (hxlmap.bounds) {
-            hxlmap.bounds.extend([lat, lon]);
-        } else {
-            hxlmap.bounds = L.latLngBounds([lat, lon], [lat, lon]);
-        }
-    });
-    hxlmap.map.addLayer(cluster);
-    if (hxlmap.bounds) {
-        hxlmap.map.fitBounds(hxlmap.bounds);
-    }
-};
-
-
-/**
- * Load geometry from iTOS
+ * Static method: load geometry from iTOS
  *
  * Will retrieve from the cache if available; otherwise, will load from iTOS.
  * The function transforms the data into a map with pcodes as the keys. The values are
@@ -137,10 +79,80 @@ hxlmap.loadItos = function(country, level, callback) {
     }
 };
 
+
+////////////////////////////////////////////////////////////////////////
+// hxlmap.Map class
+////////////////////////////////////////////////////////////////////////
+
+/**
+ * Constructor
+ */
+hxlmap.Map = function (html_id) {
+    this.map = L.map(html_id).setView([0, 0], 6);
+    L.tileLayer(hxlmap.tiles.url, hxlmap.tiles.properties).addTo(this.map);
+
+    this.bounds = null;
+    this.areaCache = {};
+};
+
+hxlmap.Map.prototype.constructor = hxlmap.Map;
+
+
+/**
+ * Add a layer to a HXL map
+ * The critical properties in a layer definition are "url" (the URL of the HXL data)
+ * and "type" ("points" or "areas"). For "areas", the "countries" property is also
+ * required.
+ * @param layer: a map of properties defining the layer.
+ */
+hxlmap.Map.prototype.addLayer = function(layer) {
+    var map = this;
+    hxl.load(hxlmap.mungeUrl(layer.url), function (source) {
+        if (layer.type == "points") {
+            map.loadPoints(layer, source);
+        } else if (layer.type == "areas") {
+            map.loadAreas(layer, source);
+        } else {
+            console.error("Skipping layer with unknown type", layer.type);
+        }
+    });
+};
+
+
+/**
+ * Load points from a HXL data source
+ */
+hxlmap.Map.prototype.loadPoints = function(layer, source) {
+    var map = this;
+    var cluster = L.markerClusterGroup();
+    source.forEach(function (row) {
+        var lat = row.get("#geo+lat");
+        var lon = row.get("#geo+lon");
+        var label = row.get("#loc+name");
+
+        var marker = L.marker([lat, lon]);
+        marker.bindPopup(label);
+        cluster.addLayer(marker);
+
+        if (map.bounds) {
+            map.bounds.extend([lat, lon]);
+        } else {
+            map.bounds = L.latLngBounds([lat, lon], [lat, lon]);
+        }
+    });
+    map.map.addLayer(cluster);
+    if (map.bounds) {
+        map.map.fitBounds(map.bounds);
+    }
+};
+
+
 /**
  * Load areas into the map
  */
-hxlmap.loadAreas = function(layer, source) {
+hxlmap.Map.prototype.loadAreas = function(layer, source) {
+    // FIXME: make level configurable
+    var map = this;
     hxlmap.loadItos(layer.country, 2, function (features) {
         var report = source.count("#adm1");
         var min = report.getMin("#meta+count");
@@ -153,7 +165,7 @@ hxlmap.loadAreas = function(layer, source) {
                 var feature = features[pcode];
                 if (feature) {
                     feature.forEach(function(contour) {
-                        L.polygon(contour, {color: "red"}).addTo(hxlmap.map);
+                        L.polygon(contour, {color: "red"}).addTo(map.map);
                     });
                 } else {
                     console.error("No feature found for", pcode);
