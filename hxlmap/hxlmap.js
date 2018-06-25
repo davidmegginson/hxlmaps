@@ -118,7 +118,6 @@ hxlmap.Map.prototype.addLayer = function(layer) {
     });
 };
 
-
 /**
  * Load points from a HXL data source
  */
@@ -133,17 +132,10 @@ hxlmap.Map.prototype.loadPoints = function(layer, source) {
         var marker = L.marker([lat, lon]);
         marker.bindPopup(label);
         cluster.addLayer(marker);
-
-        if (map.bounds) {
-            map.bounds.extend([lat, lon]);
-        } else {
-            map.bounds = L.latLngBounds([lat, lon], [lat, lon]);
-        }
+        map.extendBounds([lat, lon]);
     });
     map.map.addLayer(cluster);
-    if (map.bounds) {
-        map.map.fitBounds(map.bounds);
-    }
+    map.fitBounds();
 };
 
 
@@ -166,6 +158,7 @@ hxlmap.Map.prototype.loadAreas = function(layer, source) {
                 if (feature) {
                     feature.forEach(function(contour) {
                         L.polygon(contour, {color: "red"}).addTo(map.map);
+                        map.extendBounds(contour);
                     });
                 } else {
                     console.error("No feature found for", pcode);
@@ -174,5 +167,42 @@ hxlmap.Map.prototype.loadAreas = function(layer, source) {
                 console.info("No pcode in row");
             }
         });
+        map.fitBounds();
     });
 };
+
+/**
+ * Extend the bounds as needed.
+ * @param geo: a single point ([lat, lon]) or a list of points.
+ */
+hxlmap.Map.prototype.extendBounds = function(geo) {
+    var map = this;
+    if ($.isArray(geo)) {
+        if (geo.length > 0) {
+            if (!$.isArray(geo[0])) {
+                geo = [geo];
+            }
+            geo.forEach(function(point) {
+                if (map.bounds) {
+                    map.bounds.extend(point);
+                } else {
+                    map.bounds = L.latLngBounds(point, point);
+                }
+            });
+        } else {
+            console.error("Empty list of points for extending bounds");
+        }
+    } else {
+        console.error("Not a point or list of points", geo);
+    }
+};
+
+/**
+ * Fit the map to its bounds.
+ */
+hxlmap.Map.prototype.fitBounds = function () {
+    if (this.bounds) {
+        this.map.fitBounds(this.bounds);
+    }
+};
+
