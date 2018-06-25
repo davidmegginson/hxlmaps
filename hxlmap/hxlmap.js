@@ -83,9 +83,39 @@ hxlmap.loadPoints = function(layer, source) {
     }
 };
 
+
+/**
+ * Load geometry from iTOS
+ */
+hxlmap.loadItos = function(country, level, callback) {
+    if (hxlmap.pcodeCache[country]) {
+        callback(hxl.pcodeCache[country]);
+    } else {
+        var url = "http://gistmaps.itos.uga.edu/arcgis/rest/services/COD_External/{{country}}_pcode/MapServer/{{level}}/query?where=1%3D1&outFields=*&f=pjson"
+        url = url.replace("{{country}}", encodeURIComponent(country.toUpperCase()));
+        url = url.replace("{{level}}", encodeURIComponent(level));
+        jQuery.getJSON(url, function(data) {
+            var features = {};
+            data.features.forEach(function(feature) {
+                features[feature.attributes.admin1Pcode] = feature.geometry.rings;
+            });
+            hxlmap.pcodeCache[country] = features;
+            callback(features);
+        });
+    }
+};
+
+/**
+ * Load areas into the map
+ */
 hxlmap.loadAreas = function(layer, source) {
-    var report = source.count("#adm1");
-    report.forEach(function (row) {
-        console.log(row.values.toString());
+    hxlmap.loadItos(layer.country, 2, function (features) {
+        var report = source.count("#adm1");
+        var min = report.getMin("#meta+count");
+        var max = report.getMax("#meta+count");
+        console.log(min, max);
+        report.forEach(function (row) {
+            console.log(row.values.toString());
+        });
     });
 };
