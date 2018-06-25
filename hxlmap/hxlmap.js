@@ -123,7 +123,12 @@ hxlmap.Map.prototype.addLayer = function(layer) {
  */
 hxlmap.Map.prototype.loadPoints = function(layer, source) {
     var map = this;
-    var cluster = L.markerClusterGroup();
+    var cluster = null;
+    if (layer.cluster) {
+        cluster = L.markerClusterGroup();
+    } else {
+        cluster = L.layerGroup();
+    }
     source.forEach(function (row) {
         var lat = row.get("#geo+lat");
         var lon = row.get("#geo+lon");
