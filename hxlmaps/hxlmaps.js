@@ -16,7 +16,12 @@ var hxlmaps = {
             id: 'mapbox.streets'
         }
     },
-    areaCache: {}
+    areaCache: {},
+    defaultColorMap: [
+        { percentage: 0.0, color: { r: 0x00, g: 0xff, b: 0x00 } },
+        { percentage: 0.5, color: { r: 0xff, g: 0xff, b: 0x00 } },
+        { percentage: 1.0, color: { r: 0xff, g: 0x00, b: 0x00 } }
+    ]
 };
 
 
@@ -78,6 +83,32 @@ hxlmaps.loadItos = function(country, level, callback) {
         });
     }
 };
+
+
+/**
+ * Generate a colour from a gradiant using a colour map.
+ * Adapted from http://stackoverflow.com/posts/7128796/revisions
+ */
+hxlmaps.genColor = function(percentage, colorMap) {
+    for (var i = 1; i < colorMap.length - 1; i++) {
+        if (percentage < colorMap[i].percentage) {
+            break;
+        }
+    }
+    var lower = colorMap[i - 1];
+    var upper = colorMap[i];
+    var range = upper.percentage - lower.percentage;
+    var rangePercentage = (percentage - lower.percentage) / range;
+    var percentageLower = 1 - rangePercentage;
+    var percentageUpper = rangePercentage;
+    var color = {
+        r: Math.floor(lower.color.r * percentageLower + upper.color.r * percentageUpper),
+        g: Math.floor(lower.color.g * percentageLower + upper.color.g * percentageUpper),
+        b: Math.floor(lower.color.b * percentageLower + upper.color.b * percentageUpper)
+    };
+    return 'rgb(' + [color.r, color.g, color.b].join(',') + ')';
+    // or output as hex if preferred
+}
 
 
 ////////////////////////////////////////////////////////////////////////
@@ -148,13 +179,24 @@ hxlmaps.Map.prototype.loadPoints = function(config, source) {
  * Load areas into the map
  */
 hxlmaps.Map.prototype.loadAreas = function(config, source) {
-    // FIXME: make level configurable
+    // FIXME: make admin level configurable
     var map = this;
     hxlmaps.loadItos(config.country, 2, function (features) {
         var report = source.count("#adm1");
         var min = report.getMin("#meta+count");
         var max = report.getMax("#meta+count");
         report.forEach(function (row) {
+            var value = parseFloat(row.get("#meta+count"));
+            if (isNaN(value)) {
+                console.info("Non-numeric value", value);
+                return;
+            }
+            var percentage = (value - min) / (max - min);
+            var colorMap = config.colorMap;
+            if (!colorMap) {
+                colorMap = hxlmaps.defaultColorMap;
+            }
+            var color = hxlmaps.genColor(percentage, colorMap);
             var pcode = row.get("#adm1+code");
             if (pcode) {
                 // fixme temporary
@@ -162,7 +204,7 @@ hxlmaps.Map.prototype.loadAreas = function(config, source) {
                 var feature = features[pcode];
                 if (feature) {
                     feature.forEach(function(contour) {
-                        L.polygon(contour).addTo(map.map);
+                        L.polygon(contour, {color: color}).addTo(map.map);
                         map.extendBounds(contour);
                     });
                 } else {
@@ -210,4 +252,5 @@ hxlmaps.Map.prototype.fitBounds = function () {
         this.map.fitBounds(this.bounds);
     }
 };
+
 
