@@ -65,7 +65,7 @@ hxlmaps.loadItos = function(country, level, callback) {
         callback(hxl.areaCache[country]);
     } else {
         // need to load from iTOS and preprocess
-        var url = "http://gistmaps.itos.uga.edu/arcgis/rest/services/COD_External/{{country}}_pcode/MapServer/{{level}}/query?where=1%3D1&outFields=*&f=pjson"
+        var url = "https://gistmaps.itos.uga.edu/arcgis/rest/services/COD_External/{{country}}_pcode/MapServer/{{level}}/query?where=1%3D1&outFields=*&f=pjson"
         url = url.replace("{{country}}", encodeURIComponent(country.toUpperCase()));
         url = url.replace("{{level}}", encodeURIComponent(level));
         var promise = jQuery.getJSON(url, function(data) {
