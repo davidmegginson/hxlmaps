@@ -1,11 +1,11 @@
 ////////////////////////////////////////////////////////////////////////
-// hxlmap static properties and methods
+// hxlmaps static properties and methods
 ////////////////////////////////////////////////////////////////////////
 
 /**
- * Basic static hxlmap properties
+ * Basic static hxlmaps properties
  */
-var hxlmap = {
+var hxlmaps = {
     tiles: {
         url: 'https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token=pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXVycTA2emYycXBndHRqcmZ3N3gifQ.rJcFIG214AriISLbB6B5aw',
         properties: {
@@ -23,7 +23,7 @@ var hxlmap = {
 /**
  * Static method: munge URL to use the HXL Proxy
  */
-hxlmap.mungeUrl = function(url) {
+hxlmaps.mungeUrl = function(url) {
     return "https://proxy.hxlstandard.org/data.csv?url=" + encodeURIComponent(url);
 };
 
@@ -38,7 +38,7 @@ hxlmap.mungeUrl = function(url) {
  * @param level: an integer for the level to load (1=country, 2=admin1, 3=admin2, etc)
  * @param callback: the callback function to receive the iTOS data once loaded. 
  */
-hxlmap.loadItos = function(country, level, callback) {
+hxlmaps.loadItos = function(country, level, callback) {
 
     /**
      * iTOS reverses the lat/lon. Blech.
@@ -55,7 +55,7 @@ hxlmap.loadItos = function(country, level, callback) {
         return feature;
     }
     
-    if (hxlmap.areaCache[country]) {
+    if (hxlmaps.areaCache[country]) {
         // if we've already loaded this country before, then we're done!!
         callback(hxl.areaCache[country]);
     } else {
@@ -70,7 +70,7 @@ hxlmap.loadItos = function(country, level, callback) {
             data.features.forEach(function(feature) {
                 features[feature.attributes.admin1Pcode] = fixlatlon(feature.geometry.rings);
             });
-            hxlmap.areaCache[country] = features;
+            hxlmaps.areaCache[country] = features;
             callback(features);
         });
         promise.fail(function() {
@@ -81,21 +81,21 @@ hxlmap.loadItos = function(country, level, callback) {
 
 
 ////////////////////////////////////////////////////////////////////////
-// hxlmap.Map class
+// hxlmaps.Map class
 ////////////////////////////////////////////////////////////////////////
 
 /**
  * Constructor
  */
-hxlmap.Map = function (html_id) {
+hxlmaps.Map = function (html_id) {
     this.map = L.map(html_id).setView([0, 0], 6);
-    L.tileLayer(hxlmap.tiles.url, hxlmap.tiles.properties).addTo(this.map);
+    L.tileLayer(hxlmaps.tiles.url, hxlmaps.tiles.properties).addTo(this.map);
 
     this.bounds = null;
     this.areaCache = {};
 };
 
-hxlmap.Map.prototype.constructor = hxlmap.Map;
+hxlmaps.Map.prototype.constructor = hxlmaps.Map;
 
 
 /**
@@ -105,9 +105,9 @@ hxlmap.Map.prototype.constructor = hxlmap.Map;
  * required.
  * @param config: a map of properties defining the layer.
  */
-hxlmap.Map.prototype.addLayer = function(config) {
+hxlmaps.Map.prototype.addLayer = function(config) {
     var map = this;
-    hxl.load(hxlmap.mungeUrl(config.url), function (source) {
+    hxl.load(hxlmaps.mungeUrl(config.url), function (source) {
         if (config.type == "points") {
             map.loadPoints(config, source);
         } else if (config.type == "areas") {
@@ -121,7 +121,7 @@ hxlmap.Map.prototype.addLayer = function(config) {
 /**
  * Load points from a HXL data source
  */
-hxlmap.Map.prototype.loadPoints = function(config, source) {
+hxlmaps.Map.prototype.loadPoints = function(config, source) {
     var map = this;
     var cluster = null;
     if (config.cluster) {
@@ -147,10 +147,10 @@ hxlmap.Map.prototype.loadPoints = function(config, source) {
 /**
  * Load areas into the map
  */
-hxlmap.Map.prototype.loadAreas = function(config, source) {
+hxlmaps.Map.prototype.loadAreas = function(config, source) {
     // FIXME: make level configurable
     var map = this;
-    hxlmap.loadItos(config.country, 2, function (features) {
+    hxlmaps.loadItos(config.country, 2, function (features) {
         var report = source.count("#adm1");
         var min = report.getMin("#meta+count");
         var max = report.getMax("#meta+count");
@@ -180,7 +180,7 @@ hxlmap.Map.prototype.loadAreas = function(config, source) {
  * Extend the bounds as needed.
  * @param geo: a single point ([lat, lon]) or a list of points.
  */
-hxlmap.Map.prototype.extendBounds = function(geo) {
+hxlmaps.Map.prototype.extendBounds = function(geo) {
     var map = this;
     if ($.isArray(geo)) {
         if (geo.length > 0) {
@@ -205,7 +205,7 @@ hxlmap.Map.prototype.extendBounds = function(geo) {
 /**
  * Fit the map to its bounds.
  */
-hxlmap.Map.prototype.fitBounds = function () {
+hxlmaps.Map.prototype.fitBounds = function () {
     if (this.bounds) {
         this.map.fitBounds(this.bounds);
     }

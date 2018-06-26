@@ -11,7 +11,7 @@ var demo_layers = [
     }
 ];
 
-var demo_map = new hxlmap.Map("mapid");
+var demo_map = new hxlmaps.Map("mapid");
 
 demo_layers.forEach(function(layer) {
     console.log("Adding", layer.url);
