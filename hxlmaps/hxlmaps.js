@@ -21,7 +21,33 @@ var hxlmaps = {
         { percentage: 0.0, color: { r: 0x00, g: 0xff, b: 0x00 } },
         { percentage: 0.5, color: { r: 0xff, g: 0xff, b: 0x00 } },
         { percentage: 1.0, color: { r: 0xff, g: 0x00, b: 0x00 } }
-    ]
+    ],
+    itosAdminInfo: {
+        "#country": {
+            level: 1,
+            property: "admin0Pcode"
+        },
+        "#adm1": {
+            level: 2,
+            property: "admin1Pcode"
+        },
+        "#adm2": {
+            level: 3,
+            property: "admin2Pcode"
+        },
+        "#adm3": {
+            level: 4,
+            property: "admin3Pcode"
+        },
+        "#adm4": {
+            level: 5,
+            property: "admin4Pcode"
+        },
+        "#adm5": {
+            level: 6,
+            property: "admin5Pcode"
+        }
+    }
 };
 
 
@@ -43,7 +69,7 @@ hxlmaps.mungeUrl = function(url) {
  * @param level: an integer for the level to load (1=country, 2=admin1, 3=admin2, etc)
  * @param callback: the callback function to receive the iTOS data once loaded. 
  */
-hxlmaps.loadItos = function(country, level, callback) {
+hxlmaps.loadItos = function(config, callback) {
 
     /**
      * iTOS reverses the lat/lon. Blech.
@@ -60,26 +86,38 @@ hxlmaps.loadItos = function(country, level, callback) {
         return feature;
     }
     
-    if (hxlmaps.areaCache[country]) {
+    if (hxlmaps.areaCache[config.country]) {
         // if we've already loaded this country before, then we're done!!
-        callback(hxl.areaCache[country]);
+        callback(hxl.areaCache[config.country]);
     } else {
         // need to load from iTOS and preprocess
+        adminLevel = "#country";
+        if (config.adminLevel) {
+            adminLevel = config.adminLevel
+        }
+        var itosInfo = hxlmaps.itosAdminInfo[adminLevel];
+        if (!itosInfo) {
+            console.error("Unrecognised adminLevel in config", adminLevel);
+            return {}
+        }
+        if (!config.country) {
+            console.error("No country specified in config for area type");
+            return {};
+        }
         var url = "https://gistmaps.itos.uga.edu/arcgis/rest/services/COD_External/{{country}}_pcode/MapServer/{{level}}/query?where=1%3D1&outFields=*&f=pjson"
-        url = url.replace("{{country}}", encodeURIComponent(country.toUpperCase()));
-        url = url.replace("{{level}}", encodeURIComponent(level));
+        url = url.replace("{{country}}", encodeURIComponent(config.country.toUpperCase()));
+        url = url.replace("{{level}}", encodeURIComponent(itosInfo.level));
         var promise = jQuery.getJSON(url, function(data) {
             var features = {};
             // add each feature to the map, with the pcode as key
-            // FIXME hard-coded to the admin1Pcode
             data.features.forEach(function(feature) {
-                features[feature.attributes.admin1Pcode] = fixlatlon(feature.geometry.rings);
+                features[feature.attributes[itosInfo.property]] = fixlatlon(feature.geometry.rings);
             });
-            hxlmaps.areaCache[country] = features;
+            hxlmaps.areaCache[config.country] = features;
             callback(features);
         });
         promise.fail(function() {
-            console.error("Failed to load areas for country", country);
+            console.error("Failed to load areas for country", country, "admin level", adminLevel);
         });
     }
 };
@@ -181,8 +219,12 @@ hxlmaps.Map.prototype.loadPoints = function(config, source) {
 hxlmaps.Map.prototype.loadAreas = function(config, source) {
     // FIXME: make admin level configurable
     var map = this;
-    hxlmaps.loadItos(config.country, 2, function (features) {
-        var report = source.count("#adm1");
+    hxlmaps.loadItos(config, function (features) {
+        var adminLevel = "#country";
+        if (config.adminLevel) {
+            adminLevel = config.adminLevel;
+        }
+        var report = source.count(adminLevel);
         var min = report.getMin("#meta+count");
         var max = report.getMax("#meta+count");
         report.forEach(function (row) {
@@ -197,7 +239,7 @@ hxlmaps.Map.prototype.loadAreas = function(config, source) {
                 colorMap = hxlmaps.defaultColorMap;
             }
             var color = hxlmaps.genColor(percentage, colorMap);
-            var pcode = row.get("#adm1+code");
+            var pcode = row.get(adminLevel + "+code");
             if (pcode) {
                 // fixme temporary
                 pcode = pcode.replace("MLI", "ML");
