@@ -156,8 +156,9 @@ hxlmaps.genColor = function(percentage, colorMap) {
 /**
  * Constructor
  */
-hxlmaps.Map = function (html_id) {
-    this.map = L.map(html_id).setView([0, 0], 6);
+hxlmaps.Map = function (mapId) {
+    this.map = L.map(mapId).setView([0, 0], 6);
+    console.log(this.map);
     L.tileLayer(hxlmaps.tiles.url, hxlmaps.tiles.properties).addTo(this.map);
 
     this.bounds = null;
