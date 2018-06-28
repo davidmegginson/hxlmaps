@@ -158,8 +158,17 @@ hxlmaps.genColor = function(percentage, colorMap) {
  */
 hxlmaps.Map = function (mapId) {
     this.map = L.map(mapId).setView([0, 0], 6);
-    console.log(this.map);
-    L.tileLayer(hxlmaps.tiles.url, hxlmaps.tiles.properties).addTo(this.map);
+
+    osmTiles = L.tileLayer(hxlmaps.tiles.url, hxlmaps.tiles.properties);
+    osmTiles.addTo(this.map);
+
+    this.baseMaps = {
+        "OpenStreetMap": osmTiles,
+        "None": L.tileLayer('')
+    };
+
+    this.overlayMaps = {
+    };
 
     this.bounds = null;
     this.areaCache = {};
@@ -210,7 +219,9 @@ hxlmaps.Map.prototype.loadPoints = function(config, source) {
         map.extendBounds([lat, lon]);
     });
     map.map.addLayer(cluster);
+    map.overlayMaps[config.name] = cluster;
     map.fitBounds();
+    map.updateLayerControl();
 };
 
 
@@ -228,6 +239,7 @@ hxlmaps.Map.prototype.loadAreas = function(config, source) {
         var report = source.count(adminLevel);
         var min = report.getMin("#meta+count");
         var max = report.getMax("#meta+count");
+        var layer = L.layerGroup();
         report.forEach(function (row) {
             var value = parseFloat(row.get("#meta+count"));
             if (isNaN(value)) {
@@ -247,7 +259,7 @@ hxlmaps.Map.prototype.loadAreas = function(config, source) {
                 var feature = features[pcode];
                 if (feature) {
                     feature.forEach(function(contour) {
-                        L.polygon(contour, {color: color}).addTo(map.map);
+                        layer.addLayer(L.polygon(contour, {color: color}));
                         map.extendBounds(contour);
                     });
                 } else {
@@ -257,9 +269,13 @@ hxlmaps.Map.prototype.loadAreas = function(config, source) {
                 console.info("No pcode in row");
             }
         });
+        layer.addTo(map.map);
+        map.overlayMaps[config.name] = layer;
         map.fitBounds();
+        map.updateLayerControl();
     });
 };
+
 
 /**
  * Extend the bounds as needed.
@@ -287,6 +303,7 @@ hxlmaps.Map.prototype.extendBounds = function(geo) {
     }
 };
 
+
 /**
  * Fit the map to its bounds.
  */
@@ -297,3 +314,13 @@ hxlmaps.Map.prototype.fitBounds = function () {
 };
 
 
+/**
+ * Regenerate the layer control.
+ */
+hxlmaps.Map.prototype.updateLayerControl = function () {
+    if (this.layerControl) {
+        this.layerControl.remove(map.map);
+    }
+    this.layerControl = L.control.layers(this.baseMaps, this.overlayMaps);
+    this.layerControl.addTo(this.map);
+};
