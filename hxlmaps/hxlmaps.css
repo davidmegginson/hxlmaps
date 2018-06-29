@@ -1,0 +1,17 @@
+.map-legend {
+    background: #ffffff;
+}
+
+.map-legend .min {
+    float: left;
+}
+
+.map-legend .max {
+    float: right;
+}
+
+.map-legend .color {
+    display:inline-block;
+    width:1em;
+}
+

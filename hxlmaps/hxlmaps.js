@@ -145,9 +145,57 @@ hxlmaps.genColor = function(percentage, colorMap) {
         b: Math.floor(lower.color.b * percentageLower + upper.color.b * percentageUpper)
     };
     return 'rgb(' + [color.r, color.g, color.b].join(',') + ')';
-    // or output as hex if preferred
 }
 
+/**
+ * Make a leaflet control for the map title.
+ * @param title: the title of the map.
+ * @returns: a Leaflet control to add to the map.
+ */
+hxlmaps.makeTitleControl = function(title) {
+    var control = L.control({position: 'bottomleft'});
+    control.onAdd = function(map) {
+        var node = $('<div class="map-title">');
+        node.text(mapConfig.title);
+        return node.get(0);
+    };
+    return control;
+};
+
+/**
+ * Make a leaflet control for the map legend.
+ * @param layerConfig: the layer configuration, including color map.
+ * @param min: the minimum value in the legend.
+ * @param max: the maximum value in the legend.
+ * @returns: a Leaflet control to add to the map.
+ */
+hxlmaps.makeLegendControl = function(layerConfig, min, max) {
+    var control = L.control({position: 'bottomright'});
+    control.onAdd = function(map) {
+        var node = $('<div class="info legend map-legend">');
+        if (layerConfig.unit) {
+            console.log(layerConfig.unit);
+            var unit = $('<p class="unit">')
+            unit.text(layerConfig.unit);
+            node.append(unit);
+        }
+        for (var percentage = 0; percentage <= 1.0; percentage += 0.1) {
+            var color = hxlmaps.genColor(percentage, layerConfig.colorMap);
+            var box = $('<span class="color" style="background:' + color + '">');
+            box.html("&nbsp;");
+            node.append(box);
+        }
+        node.append($("<br>")); // FIXME: blech
+        var minValue = $('<div class="min">');
+        minValue.text(min);
+        node.append(minValue);
+        var maxValue = $('<div class="max">');
+        maxValue.text(max);
+        node.append(maxValue);
+        return node.get(0);
+    };
+    return control;
+};
 
 ////////////////////////////////////////////////////////////////////////
 // hxlmaps.Map class
@@ -182,6 +230,9 @@ hxlmaps.Map = function (mapId, mapConfig) {
 
     // if a configuration was provided, set up the map
     if (mapConfig) {
+        if (mapConfig.title) {
+            hxlmaps.makeTitleControl(mapConfig.title).addTo(map.map);
+        }
         if (mapConfig.layers) {
             mapConfig.layers.forEach(function(layerConfig) {
                 map.addLayer(layerConfig);
@@ -257,6 +308,7 @@ hxlmaps.Map.prototype.loadAreas = function(config, source) {
         var report = source.count(adminLevel);
         var min = report.getMin("#meta+count");
         var max = report.getMax("#meta+count");
+        hxlmaps.makeLegendControl(config, min, max).addTo(map.map);
         var layer = L.layerGroup();
         report.forEach(function (row) {
             var value = parseFloat(row.get("#meta+count"));
