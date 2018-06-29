@@ -155,23 +155,41 @@ hxlmaps.genColor = function(percentage, colorMap) {
 
 /**
  * Constructor
+ * @param mapId: the HTML identifier of the element holding the map.
+ * @param mapConfig: if specified, a JSON configuration for the map.
  */
-hxlmaps.Map = function (mapId) {
-    this.map = L.map(mapId).setView([0, 0], 6);
+hxlmaps.Map = function (mapId, mapConfig) {
+    var map = this;
 
+    map.map = L.map(mapId).setView([0, 0], 6);
+
+    // add the tile layer
     osmTiles = L.tileLayer(hxlmaps.tiles.url, hxlmaps.tiles.properties);
-    osmTiles.addTo(this.map);
+    osmTiles.addTo(map.map);
 
-    this.baseMaps = {
+    // set up the arrays for the layer chooser
+    map.baseMaps = {
         "OpenStreetMap": osmTiles,
         "None": L.tileLayer('')
     };
 
-    this.overlayMaps = {
+    map.overlayMaps = {
     };
 
-    this.bounds = null;
-    this.areaCache = {};
+    // set up other object variables
+    map.bounds = null;
+    map.areaCache = {};
+
+    // if a configuration was provided, set up the map
+    if (mapConfig) {
+        if (mapConfig.layers) {
+            mapConfig.layers.forEach(function(layerConfig) {
+                map.addLayer(layerConfig);
+            });
+        } else {
+            console.info("No layers specified in map config", mapConfig);
+        }
+    }
 };
 
 hxlmaps.Map.prototype.constructor = hxlmaps.Map;
