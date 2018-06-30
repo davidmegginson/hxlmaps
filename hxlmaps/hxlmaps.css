@@ -1,4 +1,4 @@
-.map-legend, .map-title {
+.map-legend {
     padding: 1ex 1em;
     font: 10pt Arial, Helvetica, sans-serif;
     background: rgba(255, 255, 255, 0.8);
@@ -11,7 +11,10 @@
 }
 
 .map-title {
+    padding: 1em;
     font: 18pt Arial, Helvetica, sans-serif;
+    font-weight: bold;
+    color: rgba(0, 0, 0, 0.5);
 }
 
 .map-legend .unit {
