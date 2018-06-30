@@ -363,7 +363,7 @@ hxlmaps.Map.prototype.loadAreas = function(config, source) {
         if (config.adminLevel) {
             adminLevel = config.adminLevel;
         }
-        var report = source.count(adminLevel);
+        var report = source.count(adminLevel + "+code");
         var min = report.getMin("#meta+count");
         var max = report.getMax("#meta+count");
         hxlmaps.makeLegendControl(config, min, max).addTo(map.map);
@@ -386,7 +386,14 @@ hxlmaps.Map.prototype.loadAreas = function(config, source) {
                 var feature = features[pcode];
                 if (feature) {
                     feature.forEach(function(contour) {
-                        layer.addLayer(L.polygon(contour, {color: color, stroke: false}));
+                        var area = L.polygon(contour, {
+                            fillColor: color,
+                            color: "#000000",
+                            weight: 1,
+                            opacity: 0.5
+                        });
+                        area.bindPopup(L.popup().setContent(value + " " + config.unit));
+                        layer.addLayer(area);
                         map.extendBounds(contour);
                     });
                 } else {
