@@ -1,9 +1,17 @@
-.map-legend {
+.map-legend, .map-title {
     padding: 1ex 1em;
     font: 10pt Arial, Helvetica, sans-serif;
-    background: rgba(255, 255, 255, 0.6);
-    box-shadow: 0 0 15px rgba(0, 0, 0, 0.4);
+    background: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
     border-radius: 5px;
+}
+
+.map-legend {
+    font: 10pt Arial, Helvetica, sans-serif;
+}
+
+.map-title {
+    font: 18pt Arial, Helvetica, sans-serif;
 }
 
 .map-legend .unit {
