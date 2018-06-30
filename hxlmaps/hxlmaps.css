@@ -1,17 +1,27 @@
 .map-legend {
-    background: #ffffff;
+    padding: 1ex 1em;
+    font: 10pt Arial, Helvetica, sans-serif;
+    background: rgba(255, 255, 255, 0.6);
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.4);
+    border-radius: 5px;
+}
+
+.map-legend .unit {
+    text-align: center;
 }
 
 .map-legend .min {
     float: left;
+    font-size: 9pt;
 }
 
 .map-legend .max {
     float: right;
+    font-size: 80%;
 }
 
 .map-legend .color {
     display:inline-block;
-    width:1em;
+    width:.5em;
 }
 

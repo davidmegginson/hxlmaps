@@ -127,7 +127,7 @@ hxlmaps.loadItos = function(config, callback) {
  * Generate a colour from a gradiant using a colour map.
  * Adapted from http://stackoverflow.com/posts/7128796/revisions
  */
-hxlmaps.genColor = function(percentage, colorMap) {
+hxlmaps.genColor = function(percentage, colorMap, alpha) {
     for (var i = 1; i < colorMap.length - 1; i++) {
         if (percentage < colorMap[i].percentage) {
             break;
@@ -144,7 +144,11 @@ hxlmaps.genColor = function(percentage, colorMap) {
         g: Math.floor(lower.color.g * percentageLower + upper.color.g * percentageUpper),
         b: Math.floor(lower.color.b * percentageLower + upper.color.b * percentageUpper)
     };
-    return 'rgb(' + [color.r, color.g, color.b].join(',') + ')';
+    if (alpha) {
+        return 'rgba(' + [color.r, color.g, color.b, alpha].join(',') + ')';
+    } else {
+        return 'rgb(' + [color.r, color.g, color.b].join(',') + ')';
+    }
 }
 
 /**
@@ -173,18 +177,29 @@ hxlmaps.makeLegendControl = function(layerConfig, min, max) {
     var control = L.control({position: 'bottomright'});
     control.onAdd = function(map) {
         var node = $('<div class="info legend map-legend">');
+
+        // set the transparency to match the map
+        var alpha = layerConfig.alpha;
+        if (!alpha) {
+            alpha = 0.2; // Leaflet default for fill
+        }
+
+        // show what's being counted
         if (layerConfig.unit) {
-            console.log(layerConfig.unit);
-            var unit = $('<p class="unit">')
-            unit.text(layerConfig.unit);
+            var unit = $('<div class="unit">')
+            unit.text("Number of " + layerConfig.unit);
             node.append(unit);
         }
-        for (var percentage = 0; percentage <= 1.0; percentage += 0.1) {
-            var color = hxlmaps.genColor(percentage, layerConfig.colorMap);
+
+        // generate a gradient from 0-100% in 5% steps
+        for (var percentage = 0; percentage <= 1.0; percentage += 0.05) {
+            var color = hxlmaps.genColor(percentage, layerConfig.colorMap, alpha);
             var box = $('<span class="color" style="background:' + color + '">');
             box.html("&nbsp;");
             node.append(box);
         }
+
+        // add the minimum and maximum absolute values
         node.append($("<br>")); // FIXME: blech
         var minValue = $('<div class="min">');
         minValue.text(min);
@@ -192,6 +207,7 @@ hxlmaps.makeLegendControl = function(layerConfig, min, max) {
         var maxValue = $('<div class="max">');
         maxValue.text(max);
         node.append(maxValue);
+        
         return node.get(0);
     };
     return control;
@@ -324,8 +340,7 @@ hxlmaps.Map.prototype.loadAreas = function(config, source) {
             var color = hxlmaps.genColor(percentage, colorMap);
             var pcode = row.get(adminLevel + "+code");
             if (pcode) {
-                // fixme temporary
-                pcode = pcode.replace("MLI", "ML");
+                pcode = pcode.replace("MLI", "ML"); // fixme temporary
                 var feature = features[pcode];
                 if (feature) {
                     feature.forEach(function(contour) {
