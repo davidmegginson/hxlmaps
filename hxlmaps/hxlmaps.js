@@ -17,11 +17,6 @@ var hxlmaps = {
         }
     },
     areaCache: {},
-    defaultColorMap: [
-        { percentage: 0.0, color: { r: 0x00, g: 0xff, b: 0x00 } },
-        { percentage: 0.5, color: { r: 0xff, g: 0xff, b: 0x00 } },
-        { percentage: 1.0, color: { r: 0xff, g: 0x00, b: 0x00 } }
-    ],
     itosAdminInfo: {
         "#country": {
             level: 1,
@@ -52,6 +47,55 @@ var hxlmaps = {
 
 
 /**
+ * Static method: set default values for a layer, based on the HXL.
+ */
+hxlmaps.setLayerDefaults = function(layer, hxlSource) {
+
+    var areaPatterns = ["#loc+code", "#adm5+code", "#adm4+code", "#adm3+code", "#adm2+code", "#adm1+code", "#country+code"];
+
+    // No type set
+    if (!layer.type) {
+        if (hxl.matchList("#geo+lat", hxlSource.columns) && hxl.matchList("#geo+lon", hxlSource.columns)) {
+            layer.type = "points";
+        } else {
+            for (var i = 0; i < areaPatterns.length; i++) {
+                if (hxl.matchList(areaPatterns[i], hxlSource.columns)) {
+                    layer.type = "areas";
+                    layer.adminLevel = areaPatterns[i];
+                    break;
+                }
+            }
+        }
+    }
+
+    if (!layer.type) {
+        console.error("type property not specified for layer, and no geo hashtags in the HXL data");
+    }
+
+    // defaults for "areas" map type
+    if (layer.type == "areas") {
+        if (!layer.colorMap) {
+            layer.colorMap = [
+                { percentage: 0.0, color: { r: 0x00, g: 0x00, b: 0x00 } },
+                { percentage: 1.0, color: { r: 0x00, g: 0xaa, b: 0xff } }
+            ];
+        }
+        if (!layer.aggregation) {
+            layer.aggregation = "count";
+        }
+        if (!layer.alpha) {
+            layer.alpha = 0.2;
+        }
+        if (!layer.unit) {
+            layer.unit = "reports";
+        }
+    }
+
+    return layer;
+};
+
+
+/**
  * Static method: munge URL to use the HXL Proxy
  */
 hxlmaps.mungeUrl = function(url) {
@@ -69,7 +113,7 @@ hxlmaps.mungeUrl = function(url) {
  * @param level: an integer for the level to load (1=country, 2=admin1, 3=admin2, etc)
  * @param callback: the callback function to receive the iTOS data once loaded. 
  */
-hxlmaps.loadItos = function(config, callback) {
+hxlmaps.loadItos = function(layerConfig, callback) {
 
     /**
      * iTOS reverses the lat/lon. Blech.
@@ -86,26 +130,23 @@ hxlmaps.loadItos = function(config, callback) {
         return feature;
     }
     
-    if (hxlmaps.areaCache[config.country]) {
+    if (hxlmaps.areaCache[layerConfig.country]) {
         // if we've already loaded this country before, then we're done!!
-        callback(hxl.areaCache[config.country]);
+        callback(hxl.areaCache[layerConfig.country]);
     } else {
         // need to load from iTOS and preprocess
-        adminLevel = "#country";
-        if (config.adminLevel) {
-            adminLevel = config.adminLevel
-        }
-        var itosInfo = hxlmaps.itosAdminInfo[adminLevel];
+        var key = hxl.classes.TagPattern.parse(layerConfig.adminLevel).tag;
+        var itosInfo = hxlmaps.itosAdminInfo[key];
         if (!itosInfo) {
-            console.error("Unrecognised adminLevel in config", adminLevel);
+            console.error("Unrecognised adminLevel in config", layerConfig.adminLevel);
             return {}
         }
-        if (!config.country) {
+        if (!layerConfig.country) {
             console.error("No country specified in config for area type");
             return {};
         }
         var url = "https://gistmaps.itos.uga.edu/arcgis/rest/services/COD_External/{{country}}_pcode/MapServer/{{level}}/query?where=1%3D1&outFields=*&f=pjson"
-        url = url.replace("{{country}}", encodeURIComponent(config.country.toUpperCase()));
+        url = url.replace("{{country}}", encodeURIComponent(layerConfig.country.toUpperCase()));
         url = url.replace("{{level}}", encodeURIComponent(itosInfo.level));
         var promise = jQuery.getJSON(url, function(data) {
             var features = {};
@@ -113,11 +154,11 @@ hxlmaps.loadItos = function(config, callback) {
             data.features.forEach(function(feature) {
                 features[feature.attributes[itosInfo.property]] = fixlatlon(feature.geometry.rings);
             });
-            hxlmaps.areaCache[config.country] = features;
+            hxlmaps.areaCache[layerConfig.country] = features;
             callback(features);
         });
         promise.fail(function() {
-            console.error("Failed to load areas for country", country, "admin level", adminLevel);
+            console.error("Failed to load areas for country", country, "admin level", layerConfig.adminLevel);
         });
     }
 };
@@ -272,6 +313,7 @@ hxlmaps.Map.prototype.constructor = hxlmaps.Map;
 hxlmaps.Map.prototype.addLayer = function(config) {
     var map = this;
     hxl.load(hxlmaps.mungeUrl(config.url), function (source) {
+        config = hxlmaps.setLayerDefaults(config, source);
         if (config.type == "points") {
             map.loadPoints(config, source);
         } else if (config.type == "areas") {
@@ -344,7 +386,7 @@ hxlmaps.Map.prototype.loadAreas = function(config, source) {
                 var feature = features[pcode];
                 if (feature) {
                     feature.forEach(function(contour) {
-                        layer.addLayer(L.polygon(contour, {color: color}));
+                        layer.addLayer(L.polygon(contour, {color: color, stroke: false}));
                         map.extendBounds(contour);
                     });
                 } else {
