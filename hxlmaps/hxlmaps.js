@@ -51,7 +51,7 @@ var hxlmaps = {
  */
 hxlmaps.setLayerDefaults = function(layer, hxlSource) {
 
-    var areaPatterns = ["#loc+code", "#adm5+code", "#adm4+code", "#adm3+code", "#adm2+code", "#adm1+code", "#country+code"];
+    var areaPatterns = ["#loc", "#adm5", "#adm4", "#adm3", "#adm2", "#adm1", "#country"];
 
     // No type set
     if (!layer.type) {
@@ -59,7 +59,7 @@ hxlmaps.setLayerDefaults = function(layer, hxlSource) {
             layer.type = "points";
         } else {
             for (var i = 0; i < areaPatterns.length; i++) {
-                if (hxl.matchList(areaPatterns[i], hxlSource.columns)) {
+                if (hxl.matchList(areaPatterns[i] + "+code", hxlSource.columns)) {
                     layer.type = "areas";
                     layer.adminLevel = areaPatterns[i];
                     break;
@@ -363,12 +363,13 @@ hxlmaps.Map.prototype.loadAreas = function(config, source) {
         if (config.adminLevel) {
             adminLevel = config.adminLevel;
         }
-        var report = source.count(adminLevel + "+code");
+        var report = source.count([adminLevel + "+name", adminLevel + "+code"]);
         var min = report.getMin("#meta+count");
         var max = report.getMax("#meta+count");
         hxlmaps.makeLegendControl(config, min, max).addTo(map.map);
         var layer = L.layerGroup();
         report.forEach(function (row) {
+            var label = row.get(adminLevel + "+name") || row.get(adminLevel);
             var value = parseFloat(row.get("#meta+count"));
             if (isNaN(value)) {
                 console.info("Non-numeric value", value);
@@ -392,7 +393,7 @@ hxlmaps.Map.prototype.loadAreas = function(config, source) {
                             weight: 1,
                             opacity: 0.5
                         });
-                        area.bindPopup(L.popup().setContent(value + " " + config.unit));
+                        area.bindPopup(L.popup().setContent(label + ": " + value + " " + config.unit));
                         layer.addLayer(area);
                         map.extendBounds(contour);
                     });
