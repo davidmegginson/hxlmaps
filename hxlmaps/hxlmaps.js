@@ -16,7 +16,7 @@ var hxlmaps = {
             id: 'mapbox.streets'
         }
     },
-    areaCache: {},
+    pcodeCache: {},
     itosAdminInfo: {
         "#country": {
             level: 1,
@@ -74,6 +74,32 @@ hxlmaps.guessCountry = function(pcode) {
     }
 };
 
+/**
+ * Load the geometry for a P-code
+ */
+hxlmaps.getGeometry = function(pcode, adminLevel, callback) {
+    var country = hxlmaps.guessCountry(pcode);
+    if (!country) {
+        console.error("Unable to guess country for P-code", pcode);
+        callback(null);
+        return;
+    }
+    if (hxlmaps.pcodeCache[country]) {
+        // already loaded
+        if (hxlmaps.pcodeCache[adminLevel]) {
+            callback(hxlmaps.codeCache[adminLevel]);
+            return;
+        }
+    } else {
+        hxlmaps.pcodeCache[country] = {};
+    }
+
+    // not loaded yet
+    hxlmaps.loadItos(country, adminLevel, function(geometry) {
+        hxlmaps.pcodeCache[country][adminLevel] = geometry;
+        callback(geometry);
+    });
+};
 
 /**
  * Static method: set default values for a layer, based on the HXL.
@@ -139,10 +165,10 @@ hxlmaps.mungeUrl = function(url) {
  * The function transforms the data into a map with pcodes as the keys. The values are
  * lists of contours, which are lists of tuples, each of which is a lat/lon point.
  * @param country: the ISO3 code for the country
- * @param level: an integer for the level to load (1=country, 2=admin1, 3=admin2, etc)
+ * @param adminLevel: the HXL hashtag for the admin level to load
  * @param callback: the callback function to receive the iTOS data once loaded. 
  */
-hxlmaps.loadItos = function(layerConfig, callback) {
+hxlmaps.loadItos = function(country, adminLevel, callback) {
 
     /**
      * iTOS reverses the lat/lon. Blech.
@@ -159,37 +185,31 @@ hxlmaps.loadItos = function(layerConfig, callback) {
         return feature;
     }
     
-    if (hxlmaps.areaCache[layerConfig.country]) {
-        // if we've already loaded this country before, then we're done!!
-        callback(hxl.areaCache[layerConfig.country]);
-    } else {
-        // need to load from iTOS and preprocess
-        var key = hxl.classes.TagPattern.parse(layerConfig.adminLevel).tag;
-        var itosInfo = hxlmaps.itosAdminInfo[key];
-        if (!itosInfo) {
-            console.error("Unrecognised adminLevel in config", layerConfig.adminLevel);
-            return {}
-        }
-        if (!layerConfig.country) {
-            console.error("No country specified in config for area type");
-            return {};
-        }
-        var url = "https://gistmaps.itos.uga.edu/arcgis/rest/services/COD_External/{{country}}_pcode/MapServer/{{level}}/query?where=1%3D1&outFields=*&f=pjson"
-        url = url.replace("{{country}}", encodeURIComponent(layerConfig.country.toUpperCase()));
-        url = url.replace("{{level}}", encodeURIComponent(itosInfo.level));
-        var promise = jQuery.getJSON(url, function(data) {
-            var features = {};
-            // add each feature to the map, with the pcode as key
-            data.features.forEach(function(feature) {
-                features[feature.attributes[itosInfo.property]] = fixlatlon(feature.geometry.rings);
-            });
-            hxlmaps.areaCache[layerConfig.country] = features;
-            callback(features);
-        });
-        promise.fail(function() {
-            console.error("Failed to load areas for country", country, "admin level", layerConfig.adminLevel);
-        });
+    // need to load from iTOS and preprocess
+    var key = hxl.classes.TagPattern.parse(adminLevel).tag;
+    var itosInfo = hxlmaps.itosAdminInfo[key];
+    if (!itosInfo) {
+        console.error("Unrecognised adminLevel in config", adminLevel);
+        return {}
     }
+    if (!country) {
+        console.error("No country specified in config for area type");
+        return {};
+    }
+    var url = "https://gistmaps.itos.uga.edu/arcgis/rest/services/COD_External/{{country}}_pcode/MapServer/{{level}}/query?where=1%3D1&outFields=*&f=pjson"
+    url = url.replace("{{country}}", encodeURIComponent(country.toUpperCase()));
+    url = url.replace("{{level}}", encodeURIComponent(itosInfo.level));
+    var promise = jQuery.getJSON(url, function(data) {
+        var features = {};
+        // add each feature to the map, with the pcode as key
+        data.features.forEach(function(feature) {
+            features[feature.attributes[itosInfo.property]] = fixlatlon(feature.geometry.rings);
+        });
+        callback(features);
+    });
+    promise.fail(function() {
+        console.error("Failed to load areas for country", country, "admin level", adminLevel);
+    });
 };
 
 
@@ -316,7 +336,6 @@ hxlmaps.Map = function (mapId, mapConfig) {
 
     // set up other object variables
     map.bounds = null;
-    map.areaCache = {};
 
     // if a configuration was provided, set up the map
     if (mapConfig) {
@@ -395,7 +414,7 @@ hxlmaps.Map.prototype.loadPoints = function(layerConfig, source) {
 hxlmaps.Map.prototype.loadAreas = function(layerConfig, source) {
     // FIXME: make admin level configurable
     var map = this;
-    hxlmaps.loadItos(layerConfig, function (features) {
+    hxlmaps.loadItos(layerConfig.country, layerConfig.adminLevel, function (features) {
         var adminLevel = "#country";
         if (layerConfig.adminLevel) {
             adminLevel = layerConfig.adminLevel;
