@@ -54,15 +54,6 @@ var hxlmaps = {
  * Guess the ISO3 country code for a P-code
  */
 hxlmaps.guessCountry = function(pcode) {
-    if (!hxlmaps.iso2map) {
-        hxlmaps.iso2map = {};
-        hxlmaps.iso3map = {};
-        hxlmaps.countryCodes.forEach(function (entry) {
-            hxlmaps.iso2map[entry[0]] = entry[1];
-            hxlmaps.iso3map[entry[1]] = entry[0];
-        });
-    }
-
     var code = pcode.substr(0, 3).toUpperCase();
     if (hxlmaps.iso3map[code]) {
         return code;
@@ -87,7 +78,7 @@ hxlmaps.getGeometry = function(pcode, adminLevel, callback) {
     if (hxlmaps.pcodeCache[country]) {
         // already loaded
         if (hxlmaps.pcodeCache[adminLevel]) {
-            callback(hxlmaps.codeCache[adminLevel]);
+            callback(hxlmaps.fuzzyPcodeLookup(pcode, hxlmaps.pcodeCache[country][adminLevel]));
             return;
         }
     } else {
@@ -97,8 +88,43 @@ hxlmaps.getGeometry = function(pcode, adminLevel, callback) {
     // not loaded yet
     hxlmaps.loadItos(country, adminLevel, function(geometry) {
         hxlmaps.pcodeCache[country][adminLevel] = geometry;
-        callback(geometry);
+        callback(hxlmaps.fuzzyPcodeLookup(pcode, geometry));
     });
+};
+
+/**
+ * Do a fuzzy P-code lookup, trying various substitutions
+ */
+hxlmaps.fuzzyPcodeLookup = function(pcode, featureMap) {
+    var iso2, iso3, newPcode;
+    
+    pcode = pcode.toUpperCase();
+
+    // try a straight lookup
+    if (featureMap[pcode]) {
+        return featureMap[pcode];
+    }
+
+    // try swapping iso3 for iso2
+    var iso2 = hxlmaps.iso3map[pcode.substr(0, 3)];
+    if (iso2) {
+        newPcode = iso2 + pcode.substr(3);
+        if (featureMap[newPcode]) {
+            return featureMap[newPcode];
+        }
+    }
+
+    // try swapping iso2 for iso3
+    var iso3 = hxlmaps.iso2map[pcode.substr(0, 2)];
+    if (iso3) {
+        var newPcode = iso3 + pcode.substr(2);
+        if (featureMap[newPcode]) {
+            return featureMap[newPcode];
+        }
+    }
+
+    // no joy
+    return null;
 };
 
 /**
@@ -192,10 +218,6 @@ hxlmaps.loadItos = function(country, adminLevel, callback) {
         console.error("Unrecognised adminLevel in config", adminLevel);
         return {}
     }
-    if (!country) {
-        console.error("No country specified in config for area type");
-        return {};
-    }
     var url = "https://gistmaps.itos.uga.edu/arcgis/rest/services/COD_External/{{country}}_pcode/MapServer/{{level}}/query?where=1%3D1&outFields=*&f=pjson"
     url = url.replace("{{country}}", encodeURIComponent(country.toUpperCase()));
     url = url.replace("{{level}}", encodeURIComponent(itosInfo.level));
@@ -203,7 +225,7 @@ hxlmaps.loadItos = function(country, adminLevel, callback) {
         var features = {};
         // add each feature to the map, with the pcode as key
         data.features.forEach(function(feature) {
-            features[feature.attributes[itosInfo.property]] = fixlatlon(feature.geometry.rings);
+            features[feature.attributes[itosInfo.property].toUpperCase()] = fixlatlon(feature.geometry.rings);
         });
         callback(features);
     });
@@ -414,34 +436,30 @@ hxlmaps.Map.prototype.loadPoints = function(layerConfig, source) {
 hxlmaps.Map.prototype.loadAreas = function(layerConfig, source) {
     // FIXME: make admin level configurable
     var map = this;
-    hxlmaps.loadItos(layerConfig.country, layerConfig.adminLevel, function (features) {
-        var adminLevel = "#country";
-        if (layerConfig.adminLevel) {
-            adminLevel = layerConfig.adminLevel;
+    var adminLevel = layerConfig.adminLevel;
+    var report = source.count([layerConfig.adminLevel + "+name", layerConfig.adminLevel + "+code"]);
+    var min = report.getMin("#meta+count");
+    var max = report.getMax("#meta+count");
+    hxlmaps.makeLegendControl(layerConfig, min, max).addTo(map.map);
+    var layer = L.layerGroup();
+    report.forEach(function (row) {
+        var label = row.get(adminLevel + "+name") || row.get(adminLevel);
+        var value = parseFloat(row.get("#meta+count"));
+        if (isNaN(value)) {
+            console.info("Non-numeric value", value);
+            return;
         }
-        var report = source.count([adminLevel + "+name", adminLevel + "+code"]);
-        var min = report.getMin("#meta+count");
-        var max = report.getMax("#meta+count");
-        hxlmaps.makeLegendControl(layerConfig, min, max).addTo(map.map);
-        var layer = L.layerGroup();
-        report.forEach(function (row) {
-            var label = row.get(adminLevel + "+name") || row.get(adminLevel);
-            var value = parseFloat(row.get("#meta+count"));
-            if (isNaN(value)) {
-                console.info("Non-numeric value", value);
-                return;
-            }
-            var percentage = (value - min) / (max - min);
-            var colorMap = layerConfig.colorMap;
-            if (!colorMap) {
-                colorMap = hxlmaps.defaultColorMap;
-            }
-            var color = hxlmaps.genColor(percentage, colorMap);
-            var pcode = row.get(adminLevel + "+code");
-            if (pcode) {
+        var percentage = (value - min) / (max - min);
+        var colorMap = layerConfig.colorMap;
+        if (!colorMap) {
+            colorMap = hxlmaps.defaultColorMap;
+        }
+        var color = hxlmaps.genColor(percentage, colorMap);
+        var pcode = row.get(adminLevel + "+code");
+        //pcode = pcode.replace("MLI", "ML"); // fixme temporary
+        if (pcode) {
+            hxlmaps.getGeometry(pcode, layerConfig.adminLevel, function(feature) {
                 // fixme - deal with holes (somehow) - example: Bamako capital area
-                pcode = pcode.replace("MLI", "ML"); // fixme temporary
-                var feature = features[pcode];
                 if (feature) {
                     feature.forEach(function(contour) {
                         var area = L.polygon(contour, {
@@ -457,14 +475,14 @@ hxlmaps.Map.prototype.loadAreas = function(layerConfig, source) {
                 } else {
                     console.error("No feature found for", pcode);
                 }
-            } else {
-                console.info("No pcode in row");
-            }
-        });
-        layer.addTo(map.map);
-        map.overlayMaps[layerConfig.name] = layer;
-        map.fitBounds();
-        map.updateLayerControl();
+                layer.addTo(map.map);
+                map.overlayMaps[layerConfig.name] = layer;
+                map.fitBounds();
+                map.updateLayerControl();
+            });
+        } else {
+            console.info("No pcode in row");
+        }
     });
 };
 
@@ -776,3 +794,12 @@ hxlmaps.countryCodes = [
     ["ZM", "ZMB"],
     ["ZW", "ZWE"]
 ];
+
+// set up the lookup tables
+hxlmaps.iso2map = {};
+hxlmaps.iso3map = {};
+hxlmaps.countryCodes.forEach(function (entry) {
+    hxlmaps.iso2map[entry[0]] = entry[1];
+    hxlmaps.iso3map[entry[1]] = entry[0];
+});
+
