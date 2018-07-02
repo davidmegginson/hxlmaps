@@ -344,7 +344,7 @@ hxlmaps.Map.prototype.loadPoints = function(layerConfig, source) {
         var lon = row.get("#geo+lon");
         var label = row.get("#loc+name");
 
-        var marker = L.marker([lat, lon]);
+        var marker = L.marker([lat, lon], {icon: L.divIcon()});
         marker.bindPopup(label);
         cluster.addLayer(marker);
         map.extendBounds([lat, lon]);
