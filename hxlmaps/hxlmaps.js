@@ -99,7 +99,7 @@ hxlmaps.setLayerDefaults = function(layer, hxlSource) {
  * Static method: munge URL to use the HXL Proxy
  */
 hxlmaps.mungeUrl = function(url) {
-    return "https://proxy.hxlstandard.org/data.csv?url=" + encodeURIComponent(url);
+    return "https://proxy.hxlstandard.org/data.json?url=" + encodeURIComponent(url);
 };
 
 
@@ -310,27 +310,31 @@ hxlmaps.Map.prototype.constructor = hxlmaps.Map;
  * required.
  * @param config: a map of properties defining the layer.
  */
-hxlmaps.Map.prototype.addLayer = function(config) {
+hxlmaps.Map.prototype.addLayer = function(layerConfig) {
     var map = this;
-    hxl.load(hxlmaps.mungeUrl(config.url), function (source) {
-        config = hxlmaps.setLayerDefaults(config, source);
-        if (config.type == "points") {
-            map.loadPoints(config, source);
-        } else if (config.type == "areas") {
-            map.loadAreas(config, source);
+    var promise = jQuery.getJSON(hxlmaps.mungeUrl(layerConfig.url), function (jsonData) {
+        var source = hxl.wrap(jsonData);
+        layerConfig = hxlmaps.setLayerDefaults(layerConfig, source);
+        if (layerConfig.type == "points") {
+            map.loadPoints(layerConfig, source);
+        } else if (layerConfig.type == "areas") {
+            map.loadAreas(layerConfig, source);
         } else {
-            console.error("Skipping layer with unknown type", config.type);
+            console.error("Skipping layer with unknown type", layerConfig.type);
         }
+    });
+    promise.fail(function() {
+        console.error("Failed to read", layerConfig.url);
     });
 };
 
 /**
  * Load points from a HXL data source
  */
-hxlmaps.Map.prototype.loadPoints = function(config, source) {
+hxlmaps.Map.prototype.loadPoints = function(layerConfig, source) {
     var map = this;
     var cluster = null;
-    if (config.cluster) {
+    if (layerConfig.cluster) {
         cluster = L.markerClusterGroup();
     } else {
         cluster = L.layerGroup();
@@ -346,7 +350,7 @@ hxlmaps.Map.prototype.loadPoints = function(config, source) {
         map.extendBounds([lat, lon]);
     });
     map.map.addLayer(cluster);
-    map.overlayMaps[config.name] = cluster;
+    map.overlayMaps[layerConfig.name] = cluster;
     map.fitBounds();
     map.updateLayerControl();
 };
@@ -355,18 +359,18 @@ hxlmaps.Map.prototype.loadPoints = function(config, source) {
 /**
  * Load areas into the map
  */
-hxlmaps.Map.prototype.loadAreas = function(config, source) {
+hxlmaps.Map.prototype.loadAreas = function(layerConfig, source) {
     // FIXME: make admin level configurable
     var map = this;
-    hxlmaps.loadItos(config, function (features) {
+    hxlmaps.loadItos(layerConfig, function (features) {
         var adminLevel = "#country";
-        if (config.adminLevel) {
-            adminLevel = config.adminLevel;
+        if (layerConfig.adminLevel) {
+            adminLevel = layerConfig.adminLevel;
         }
         var report = source.count([adminLevel + "+name", adminLevel + "+code"]);
         var min = report.getMin("#meta+count");
         var max = report.getMax("#meta+count");
-        hxlmaps.makeLegendControl(config, min, max).addTo(map.map);
+        hxlmaps.makeLegendControl(layerConfig, min, max).addTo(map.map);
         var layer = L.layerGroup();
         report.forEach(function (row) {
             var label = row.get(adminLevel + "+name") || row.get(adminLevel);
@@ -376,13 +380,14 @@ hxlmaps.Map.prototype.loadAreas = function(config, source) {
                 return;
             }
             var percentage = (value - min) / (max - min);
-            var colorMap = config.colorMap;
+            var colorMap = layerConfig.colorMap;
             if (!colorMap) {
                 colorMap = hxlmaps.defaultColorMap;
             }
             var color = hxlmaps.genColor(percentage, colorMap);
             var pcode = row.get(adminLevel + "+code");
             if (pcode) {
+                // fixme - deal with holes (somehow) - example: Bamako capital area
                 pcode = pcode.replace("MLI", "ML"); // fixme temporary
                 var feature = features[pcode];
                 if (feature) {
@@ -393,7 +398,7 @@ hxlmaps.Map.prototype.loadAreas = function(config, source) {
                             weight: 1,
                             opacity: 0.5
                         });
-                        area.bindPopup(L.popup().setContent(label + ": " + value + " " + config.unit));
+                        area.bindPopup(L.popup().setContent(label + ": " + value + " " + layerConfig.unit));
                         layer.addLayer(area);
                         map.extendBounds(contour);
                     });
@@ -405,7 +410,7 @@ hxlmaps.Map.prototype.loadAreas = function(config, source) {
             }
         });
         layer.addTo(map.map);
-        map.overlayMaps[config.name] = layer;
+        map.overlayMaps[layerConfig.name] = layer;
         map.fitBounds();
         map.updateLayerControl();
     });
