@@ -17,6 +17,7 @@ var hxlmaps = {
         }
     },
     pcodeCache: {},
+    itosPromise: $.when(null),
     itosAdminInfo: {
         "#country": {
             level: 1,
@@ -69,26 +70,28 @@ hxlmaps.guessCountry = function(pcode) {
  * Load the geometry for a P-code
  */
 hxlmaps.getGeometry = function(pcode, adminLevel, callback) {
-    var country = hxlmaps.guessCountry(pcode);
-    if (!country) {
-        console.error("Unable to guess country for P-code", pcode);
-        callback(null);
-        return;
-    }
-    if (hxlmaps.pcodeCache[country]) {
-        // already loaded
-        if (hxlmaps.pcodeCache[adminLevel]) {
-            callback(hxlmaps.fuzzyPcodeLookup(pcode, hxlmaps.pcodeCache[country][adminLevel]));
+    hxlmaps.itosPromise.done(function () {
+        var country = hxlmaps.guessCountry(pcode);
+        if (!country) {
+            console.error("Unable to guess country for P-code", pcode);
+            callback(null);
             return;
         }
-    } else {
-        hxlmaps.pcodeCache[country] = {};
-    }
+        if (hxlmaps.pcodeCache[country]) { 
+           // already loaded
+            if (hxlmaps.pcodeCache[country][adminLevel]) {
+                callback(hxlmaps.fuzzyPcodeLookup(pcode, hxlmaps.pcodeCache[country][adminLevel]));
+                return;
+            }
+        } else {
+            hxlmaps.pcodeCache[country] = {};
+        }
 
-    // not loaded yet
-    hxlmaps.loadItos(country, adminLevel, function(geometry) {
-        hxlmaps.pcodeCache[country][adminLevel] = geometry;
-        callback(hxlmaps.fuzzyPcodeLookup(pcode, geometry));
+        // not loaded yet
+        hxlmaps.itosPromise = hxlmaps.loadItos(country, adminLevel, function(geometry) {
+            hxlmaps.pcodeCache[country][adminLevel] = geometry;
+            callback(hxlmaps.fuzzyPcodeLookup(pcode, geometry));
+        });
     });
 };
 
@@ -232,6 +235,7 @@ hxlmaps.loadItos = function(country, adminLevel, callback) {
     promise.fail(function() {
         console.error("Failed to load areas for country", country, "admin level", adminLevel);
     });
+    return promise;
 };
 
 
