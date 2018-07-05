@@ -38,11 +38,16 @@ hxlmaps = {
  */
 hxlmaps.Map = function(mapId, mapConfig) {
     var outer = this;
-    outer.layers = [];
+    this.layers = [];
+
     if (mapConfig) {
+        this.map = L.map(mapId).setView([0, 0], 6);
+
         if (mapConfig.layers) {
             mapConfig.layers.forEach(function(layerConfig) {
-                outer.layers.push(new hxlmaps.Layer(layerConfig));
+                var layer = new hxlmaps.Layer(outer.map, layerConfig);
+                layer.setup();
+                outer.layers.push(layer);
             });
         }
     }
@@ -57,9 +62,9 @@ hxlmaps.Map = function(mapId, mapConfig) {
  * Constructor
  * @param
  */
-hxlmaps.Layer = function(layerConfig) {
+hxlmaps.Layer = function(map, layerConfig) {
+    this.map = map;
     this.config = layerConfig;
-    this.setup();
 };
 
 /**
@@ -67,8 +72,8 @@ hxlmaps.Layer = function(layerConfig) {
  */
 hxlmaps.Layer.prototype.setup = function () {
     var outer = this;
-    var promise = this.loadHXL();
-    promise.done(function () {
+    
+    this.loadHXL().done(function () {
         outer.setType();
         if (outer.config.type == "points") {
             outer.setupPoints();
@@ -95,6 +100,13 @@ hxlmaps.Layer.prototype.setupAreas = function () {
     this.setCountries();
     this.loadGeoJSON().done(function () {
         console.log("Finished loading countries", outer.countryMap);
+        for (var key in outer.countryMap) {
+            var entry = outer.countryMap[key];
+            if (entry.geojson) {
+                entry.leafletLayer = L.geoJSON(entry.geojson);
+                entry.leafletLayer.addTo(outer.map);
+            }
+        }
     });
 };
 
@@ -160,7 +172,7 @@ hxlmaps.Layer.prototype.setCountries = function () {
     this.source.rows.forEach(function (row) {
         var countryCode = row.get("#country+code");
         if (countryCode) {
-            outer.countryMap[countryCode] = true;
+            outer.countryMap[countryCode] = {};
         } else {
             var pcode = row.get(outer.config.adminLevel + "+code");
             if (!pcode) {
@@ -168,9 +180,9 @@ hxlmaps.Layer.prototype.setCountries = function () {
             } else {
                 var code = pcode.substr(0, 3).toUpperCase();
                 if (hxlmaps.iso3map[code]) {
-                    outer.countryMap[code] = true;
+                    outer.countryMap[code] = {};
                 } else if (hxlmaps.iso2map[code.substr(0, 2)]) {
-                    outer.countryMap[hxlmaps.iso2map[code.substr(0, 2)]] = true;
+                    outer.countryMap[hxlmaps.iso2map[code.substr(0, 2)]] = {};
                 } else {
                     console.error("Cannot guess country for P-code", pcode);
                 }
@@ -197,7 +209,7 @@ hxlmaps.Layer.prototype.loadGeoJSON = function () {
         url = url.replace("{{level}}", l.level);
         var promise = jQuery.getJSON(url);
         promises.push(promise.done(function (geojson) {
-            outer.countryMap[countryCode] = geojson;
+            outer.countryMap[countryCode]["geojson"] = geojson;
         }));
         promise.fail(function () {
             console.error("Cannot open GeoJSON", countryCode, outer.config.adminLevel);
