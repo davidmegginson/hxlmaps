@@ -4,8 +4,10 @@ var mapConfig = {
     title: "hxlmaps demo",
     layers: [
         {
-            name: "Mali airports",
-            url: "http://ourairports.com/countries/ML/airports.hxl"
+            name: "ACLED conflict locations",
+            url: "https://data.humdata.org/dataset/acled-data-for-mali",
+            unit: "incidents",
+            cluster: true
         },
         {
             name: "Mali 3W",
