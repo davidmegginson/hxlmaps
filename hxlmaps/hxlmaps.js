@@ -1,31 +1,10 @@
+/**
+ * Set up an object to hold the namespace.
+ * Everything in this module is under the hxlmaps namespace.
+ */
 hxlmaps = {
-    itosAdminInfo: {
-        "#country": {
-            level: 1,
-            property: "admin0Pcode"
-        },
-        "#adm1": {
-            level: 2,
-            property: "admin1Pcode"
-        },
-        "#adm2": {
-            level: 3,
-            property: "admin2Pcode"
-        },
-        "#adm3": {
-            level: 4,
-            property: "admin3Pcode"
-        },
-        "#adm4": {
-            level: 5,
-            property: "admin4Pcode"
-        },
-        "#adm5": {
-            level: 6,
-            property: "admin5Pcode"
-        }
-    }
 };
+
 
 ////////////////////////////////////////////////////////////////////////
 // hxlmaps.Map class
@@ -72,7 +51,7 @@ hxlmaps.Layer = function(map, layerConfig) {
  */
 hxlmaps.Layer.prototype.setup = function () {
     var outer = this;
-    
+
     this.loadHXL().done(function () {
         outer.setType();
         if (outer.config.type == "points") {
@@ -98,12 +77,22 @@ hxlmaps.Layer.prototype.setupAreas = function () {
     var outer = this;
     this.source = this.source.count([this.config.adminLevel + "+name", this.config.adminLevel + "+code"]);
     this.setCountries();
+    if (!this.config.colorMap) {
+        this.config.colorMap = [
+            { percentage: 0.0, color: { r: 0x00, g: 0x00, b: 0x00 } },
+            { percentage: 1.0, color: { r: 0x00, g: 0xaa, b: 0xff } }
+        ];
+    }
     this.loadGeoJSON().done(function () {
-        console.log("Finished loading countries", outer.countryMap);
         for (var key in outer.countryMap) {
+            function doStyle (feature) {
+                return outer.makeAreaStyle(feature);
+            }
             var entry = outer.countryMap[key];
             if (entry.geojson) {
-                entry.leafletLayer = L.geoJSON(entry.geojson);
+                entry.leafletLayer = L.geoJSON(entry.geojson, {
+                    style: doStyle
+                });
                 entry.leafletLayer.addTo(outer.map);
             }
         }
@@ -123,7 +112,6 @@ hxlmaps.Layer.prototype.loadHXL = function() {
         });
         return promise.done(function (source) {
             outer.source = hxl.wrap(source);
-            console.log("Loaded HXL", outer.source);
         });
     } else {
         console.error("No dataset specified for layer", this.config);
@@ -191,22 +179,67 @@ hxlmaps.Layer.prototype.setCountries = function () {
     });
 };
 
+
+/**
+ * Create a style for an area.
+ * Attributes will be in feature.properties
+ * @param feature: a GeoJSON feature
+ * @return: an object specifying Leaflet styles
+ */
+hxlmaps.Layer.prototype.makeAreaStyle = function (feature) {
+
+    var outer = this;
+    
+    // set up a map of values if it does not already exist
+    if (!this.valueMap) {
+        this.valueMap = {};
+        this.source.forEach(function (row) {
+            var name = row.get('#*+name');
+            var pcode = row.get('#*+code');
+            var count = row.get('#meta+count');
+            if (pcode) {
+                pcode = pcode.toUpperCase();
+                outer.valueMap[pcode] = {
+                    name: name,
+                    pcode: pcode,
+                    count: count
+                };
+            } else {
+                console.info("No p-code in row", name, count);
+            }
+        });
+    }
+
+    // get the maximum value if we don't already have it
+    if (!this.maxValue) {
+        this.maxValue = this.source.getMax('#meta+count');
+    }
+
+    // figure out the weighting of this area, and calculate a color
+    var pcode = feature.properties[this.adminInfo.property];
+    var info = hxlmaps.fuzzyPcodeLookup(pcode, this.valueMap);
+    var percentage = (0+info.count) / (0+this.maxValue);
+    var color = hxlmaps.genColor(percentage, this.config.colorMap);
+
+    return {color: color};
+};
+
 /**
  * Load GeoJSON from iTOS for all required countries.
  */
 hxlmaps.Layer.prototype.loadGeoJSON = function () {
     var outer = this;
-    var countries = Object.keys(outer.countryMap);
+    var countries = Object.keys(this.countryMap);
     var urlPattern = "https://gistmaps.itos.uga.edu/arcgis/rest/services/COD_External/{{country}}_pcode/MapServer/{{level}}/query?where=1%3D1&outFields=*&f=geojson";
-    var l = hxlmaps.itosAdminInfo[outer.config.adminLevel];
-    if (!l) {
-        console.error("Unrecognised admin level", outer.config.adminLevel);
+    this.adminInfo = hxlmaps.itosAdminInfo[this.config.adminLevel];
+    if (!this.adminInfo) {
+        console.error("Unrecognised admin level", this.config.adminLevel);
         return;
     }
     var promises = []
     countries.forEach(function (countryCode) {
         var url = urlPattern.replace("{{country}}", countryCode);
-        url = url.replace("{{level}}", l.level);
+        url = url.replace("{{level}}", outer.adminInfo.level);
         var promise = jQuery.getJSON(url);
         promises.push(promise.done(function (geojson) {
             outer.countryMap[countryCode]["geojson"] = geojson;
@@ -220,12 +253,116 @@ hxlmaps.Layer.prototype.loadGeoJSON = function () {
 
 
 ////////////////////////////////////////////////////////////////////////
+// Static variables and functions
+////////////////////////////////////////////////////////////////////////
+
+/**
+ * Generate a colour from a gradiant using a colour map.
+ * Adapted from http://stackoverflow.com/posts/7128796/revisions
+ * @param percentage: a percentage value from 0.0 to 0.1
+ * @param colorMap: the colour map to interpolate
+ * @param alpha: (optional) an alpha value from 0.0 to 1.0
+ * @returns: a colour specification in rgb or rgba format
+ */
+hxlmaps.genColor = function(percentage, colorMap, alpha) {
+    for (var i = 1; i < colorMap.length - 1; i++) {
+        if (percentage < colorMap[i].percentage) {
+            break;
+        }
+    }
+    var lower = colorMap[i - 1];
+    var upper = colorMap[i];
+    var range = upper.percentage - lower.percentage;
+    var rangePercentage = (percentage - lower.percentage) / range;
+    var percentageLower = 1 - rangePercentage;
+    var percentageUpper = rangePercentage;
+    var color = {
+        r: Math.floor(lower.color.r * percentageLower + upper.color.r * percentageUpper),
+        g: Math.floor(lower.color.g * percentageLower + upper.color.g * percentageUpper),
+        b: Math.floor(lower.color.b * percentageLower + upper.color.b * percentageUpper)
+    };
+    if (alpha) {
+        return 'rgba(' + [color.r, color.g, color.b, alpha].join(',') + ')';
+    } else {
+        return 'rgb(' + [color.r, color.g, color.b].join(',') + ')';
+    }
+}
+
+
+/**
+ * Do a fuzzy P-code lookup, trying various substitutions
+ * Force the P-code to upper case, and try both ISO2 and ISO3 variants.
+ * @param pcode: the P-code to look up
+ * @param obj: the object (hashmap) in which to look up the P-code.
+ * @returns: the value associated with the P-code in the object/hashmap if found; otherwise, undefined.
+ */
+hxlmaps.fuzzyPcodeLookup = function(pcode, obj) {
+    var iso2, iso3, newPcode;
+    
+    pcode = pcode.toUpperCase();
+
+    // try a straight lookup
+    if (obj[pcode]) {
+        return obj[pcode];
+    }
+
+    // try swapping iso3 for iso2
+    var iso2 = hxlmaps.iso3map[pcode.substr(0, 3)];
+    if (iso2) {
+        newPcode = iso2 + pcode.substr(3);
+        if (obj[newPcode]) {
+            return obj[newPcode];
+        }
+    }
+
+    // try swapping iso2 for iso3
+    var iso3 = hxlmaps.iso2map[pcode.substr(0, 2)];
+    if (iso3) {
+        var newPcode = iso3 + pcode.substr(2);
+        if (obj[newPcode]) {
+            return obj[newPcode];
+        }
+    }
+
+    // no joy
+    return undefined;
+};
+
+
+////////////////////////////////////////////////////////////////////////
 // Static data
 ////////////////////////////////////////////////////////////////////////
 
-//
-// Data
-//
+/**
+ * Map from the admin levels used by HXL to those used by iTOS
+ */
+hxlmaps.itosAdminInfo = {
+    "#country": {
+        level: 1,
+        property: "admin0Pcode"
+    },
+    "#adm1": {
+        level: 2,
+        property: "admin1Pcode"
+    },
+    "#adm2": {
+        level: 3,
+        property: "admin2Pcode"
+    },
+    "#adm3": {
+        level: 4,
+        property: "admin3Pcode"
+    },
+    "#adm4": {
+        level: 5,
+        property: "admin4Pcode"
+    },
+    "#adm5": {
+        level: 6,
+        property: "admin5Pcode"
+    }
+};
+
 
 /**
  * ISO2 and ISO3 country codes
