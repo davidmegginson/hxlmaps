@@ -17,35 +17,67 @@ hxlmaps = {
  */
 hxlmaps.Map = function(mapId, mapConfig) {
     var outer = this;
+
+    /**
+     * hxlmaps.HXLLayer objects
+     */
     this.layers = [];
 
     if (mapConfig) {
+        // if the user supplied a configuration file, set up the map
+
+        var promises = [];
+
+        // the Leaflet map object
         this.map = L.map(mapId, {maxZoom: 18}).setView([0, 0], 6);
 
+        // load each HXL-based layer
         if (mapConfig.layers) {
             mapConfig.layers.forEach(function(layerConfig) {
                 var layer = new hxlmaps.Layer(outer.map, layerConfig);
-                layer.load().done(function () {
+                var promise = layer.load();
+                promises.push(promise);
+                promise.done(function () {
                     if (layer.bounds) {
                         outer.extendBounds(layer.bounds);
-                        outer.snapToBounds();
                     }
                     outer.map.addLayer(layer.leafletLayer);
                 });
                 outer.layers.push(layer);
             });
         }
-    }
-};
 
-hxlmaps.Map.prototype.extendBounds = function (geo) {
-    if (this.bounds) {
-        this.bounds.extend(geo);
+        // this runs only after all layers are loaded
+        $.when.apply($, promises).done(function () {
+            if (outer.layers.length == 0) {
+                console.error("No layers defined");
+            }
+            console.log("All layers loaded", outer.layers);
+            outer.snapToBounds();
+        });
+
     } else {
-        this.bounds = L.latLngBounds(geo);
+        // no config supplied
+        console.error("No map configuration supplied");
     }
 };
 
+
+/**
+ * Extend the bounding rectangle of the map, creating if necessary
+ */
+hxlmaps.Map.prototype.extendBounds = function (points) {
+    if (this.bounds) {
+        this.bounds.extend(points);
+    } else {
+        this.bounds = L.latLngBounds(points);
+    }
+};
+
+
+/**
+ * Snap the map to its current bounding rectangle.
+ */
 hxlmaps.Map.prototype.snapToBounds = function () {
     if (this.bounds) {
         this.map.fitBounds(this.bounds);
@@ -96,6 +128,7 @@ hxlmaps.Layer.prototype.load = function () {
     return deferred.promise();
 };
 
+
 /**
  * Continue setup for a points layer.
  * @returns: a promise that resolves when the points are loaded into the map
@@ -119,6 +152,7 @@ hxlmaps.Layer.prototype.loadPoints = function () {
 
     return $.when($); // empty promise (resolves instantly)
 };
+
 
 /**
  * Continue setup for an areas layer.
@@ -159,6 +193,7 @@ hxlmaps.Layer.prototype.loadAreas = function () {
     return deferred.promise();
 };
 
+
 /**
  * Load the HXL data for the layer.
  * @returns: a promise that resolves when the HXL data is loaded.
@@ -185,6 +220,7 @@ hxlmaps.Layer.prototype.loadHXL = function() {
 
     return deferred.promise();
 };
+
 
 /**
  * Load GeoJSON from iTOS for all required countries.
@@ -213,6 +249,7 @@ hxlmaps.Layer.prototype.loadGeoJSON = function () {
     });
     return $.when.apply($, promises); // return a promise that won't complete until all others are done
 };
+
 
 /**
  * Guess what type of a layer to make.
@@ -246,6 +283,7 @@ hxlmaps.Layer.prototype.setType = function () {
     }
 };
 
+
 /**
  * Figure out what countries we need to load from iTOS.
  */
@@ -274,6 +312,7 @@ hxlmaps.Layer.prototype.setCountries = function () {
     });
 };
 
+
 /**
  * Extend this layer's bounds as needed.
  */
@@ -284,6 +323,7 @@ hxlmaps.Layer.prototype.extendBounds = function (geo) {
         this.bounds = L.latLngBounds(geo);
     }
 };
+
 
 /**
  * Create a style for an area.
