@@ -25,7 +25,9 @@ hxlmaps.Map = function(mapId, mapConfig) {
         if (mapConfig.layers) {
             mapConfig.layers.forEach(function(layerConfig) {
                 var layer = new hxlmaps.Layer(outer.map, layerConfig);
-                layer.setup();
+                layer.load().done(function () {
+                    console.log("Done loading layer", layerConfig);
+                });
                 outer.layers.push(layer);
             });
         }
@@ -48,33 +50,46 @@ hxlmaps.Layer = function(map, layerConfig) {
 
 /**
  * Set up the layer so that it's ready to display on a map.
+ * @returns: a promise that resolves when the layer is loaded into the map
  */
-hxlmaps.Layer.prototype.setup = function () {
+hxlmaps.Layer.prototype.load = function () {
     var outer = this;
+    var deferred = $.Deferred();
 
     this.loadHXL().done(function () {
         outer.setType();
         if (outer.config.type == "points") {
-            outer.setupPoints();
+            outer.loadPoints().done(function () {
+                deferred.resolve();
+            });
         } else if (outer.config.type == "areas") {
-            outer.setupAreas();
+            outer.loadAreas().done(function () {
+                deferred.resolve();
+            });
         } else {
             console.error("Bad layer type", outer.config.type);
         }
     });
+
+    return deferred.promise();
 };
 
 /**
  * Continue setup for a points layer.
+ * @returns: a promise that resolves when the points are loaded into the map
  */
-hxlmaps.Layer.prototype.setupPoints = function () {
+hxlmaps.Layer.prototype.loadPoints = function () {
+    return $.when($);
 };
 
 /**
  * Continue setup for an areas layer.
+ * @returns: a promise that resolves when the areas are loaded into the map
  */
-hxlmaps.Layer.prototype.setupAreas = function () {
+hxlmaps.Layer.prototype.loadAreas = function () {
     var outer = this;
+    var deferred = $.Deferred();
+    
     this.source = this.source.count([this.config.adminLevel + "+name", this.config.adminLevel + "+code"]);
     this.setCountries();
     if (!this.config.colorMap) {
@@ -83,7 +98,10 @@ hxlmaps.Layer.prototype.setupAreas = function () {
             { percentage: 1.0, color: { r: 0x00, g: 0xaa, b: 0xff } }
         ];
     }
-    this.loadGeoJSON().done(function () {
+
+    var promise = this.loadGeoJSON();
+
+    promise.done(function () {
         for (var key in outer.countryMap) {
             function doStyle (feature) {
                 return outer.makeAreaStyle(feature);
@@ -96,27 +114,66 @@ hxlmaps.Layer.prototype.setupAreas = function () {
                 entry.leafletLayer.addTo(outer.map);
             }
         }
+        console.log("GeoJSON loaded");
+        deferred.resolve();
     });
+
+    return deferred.promise();
 };
 
 /**
  * Load the HXL data for the layer.
+ * @returns: a promise that resolves when the HXL data is loaded.
  */
 hxlmaps.Layer.prototype.loadHXL = function() {
     var outer = this;
+    var deferred = $.Deferred();
+    
     if (this.config.url) {
         var url = "https://proxy.hxlstandard.org/data.json?url=" + encodeURIComponent(this.config.url);
         var promise = jQuery.getJSON(url);
         promise.fail(function () {
             console.error("Unable to read HXL dataset", url);
+            deferred.reject();
         });
-        return promise.done(function (source) {
+        promise.done(function (source) {
             outer.source = hxl.wrap(source);
+            deferred.resolve();
         });
     } else {
         console.error("No dataset specified for layer", this.config);
-        return  undefined;
+        deferred.reject();
     }
+
+    return deferred.promise();
+};
+
+/**
+ * Load GeoJSON from iTOS for all required countries.
+ * @returns: a promise that resolves when the GeoJSON is loaded into the map.
+ */
+hxlmaps.Layer.prototype.loadGeoJSON = function () {
+    var outer = this;
+    var countries = Object.keys(this.countryMap);
+    var urlPattern = "https://gistmaps.itos.uga.edu/arcgis/rest/services/COD_External/{{country}}_pcode/MapServer/{{level}}/query?where=1%3D1&outFields=*&f=geojson";
+    this.adminInfo = hxlmaps.itosAdminInfo[this.config.adminLevel];
+    if (!this.adminInfo) {
+        console.error("Unrecognised admin level", this.config.adminLevel);
+        return;
+    }
+    var promises = []
+    countries.forEach(function (countryCode) {
+        var url = urlPattern.replace("{{country}}", countryCode);
+        url = url.replace("{{level}}", outer.adminInfo.level);
+        var promise = jQuery.getJSON(url);
+        promises.push(promise.done(function (geojson) {
+            outer.countryMap[countryCode]["geojson"] = geojson;
+        }));
+        promise.fail(function () {
+            console.error("Cannot open GeoJSON", countryCode, outer.config.adminLevel);
+        });
+    });
+    return $.when.apply($, promises); // return a promise that won't complete until all others are done
 };
 
 /**
@@ -222,33 +279,6 @@ hxlmaps.Layer.prototype.makeAreaStyle = function (feature) {
     var color = hxlmaps.genColor(percentage, this.config.colorMap);
 
     return {color: color};
-};
-
-/**
- * Load GeoJSON from iTOS for all required countries.
- */
-hxlmaps.Layer.prototype.loadGeoJSON = function () {
-    var outer = this;
-    var countries = Object.keys(this.countryMap);
-    var urlPattern = "https://gistmaps.itos.uga.edu/arcgis/rest/services/COD_External/{{country}}_pcode/MapServer/{{level}}/query?where=1%3D1&outFields=*&f=geojson";
-    this.adminInfo = hxlmaps.itosAdminInfo[this.config.adminLevel];
-    if (!this.adminInfo) {
-        console.error("Unrecognised admin level", this.config.adminLevel);
-        return;
-    }
-    var promises = []
-    countries.forEach(function (countryCode) {
-        var url = urlPattern.replace("{{country}}", countryCode);
-        url = url.replace("{{level}}", outer.adminInfo.level);
-        var promise = jQuery.getJSON(url);
-        promises.push(promise.done(function (geojson) {
-            outer.countryMap[countryCode]["geojson"] = geojson;
-        }));
-        promise.fail(function () {
-            console.error("Cannot open GeoJSON", countryCode, outer.config.adminLevel);
-        });
-    });
-    return $.when.apply($, promises); // return a promise that won't complete until all others are done
 };
 
 
