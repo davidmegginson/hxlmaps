@@ -20,17 +20,37 @@ hxlmaps.Map = function(mapId, mapConfig) {
     this.layers = [];
 
     if (mapConfig) {
-        this.map = L.map(mapId).setView([0, 0], 6);
+        this.map = L.map(mapId, {maxZoom: 18}).setView([0, 0], 6);
 
         if (mapConfig.layers) {
             mapConfig.layers.forEach(function(layerConfig) {
                 var layer = new hxlmaps.Layer(outer.map, layerConfig);
                 layer.load().done(function () {
-                    console.log("Done loading layer", layerConfig);
+                    if (layer.bounds) {
+                        outer.extendBounds(layer.bounds);
+                        outer.snapToBounds();
+                    }
+                    outer.map.addLayer(layer.leafletLayer);
                 });
                 outer.layers.push(layer);
             });
         }
+    }
+};
+
+hxlmaps.Map.prototype.extendBounds = function (geo) {
+    if (this.bounds) {
+        this.bounds.extend(geo);
+    } else {
+        this.bounds = L.latLngBounds(geo);
+    }
+};
+
+hxlmaps.Map.prototype.snapToBounds = function () {
+    if (this.bounds) {
+        this.map.fitBounds(this.bounds);
+    } else {
+        console.error("No bounds to snap to");
     }
 };
 
@@ -56,6 +76,8 @@ hxlmaps.Layer.prototype.load = function () {
     var outer = this;
     var deferred = $.Deferred();
 
+    this.leafletLayer = L.layerGroup();
+
     this.loadHXL().done(function () {
         outer.setType();
         if (outer.config.type == "points") {
@@ -79,7 +101,23 @@ hxlmaps.Layer.prototype.load = function () {
  * @returns: a promise that resolves when the points are loaded into the map
  */
 hxlmaps.Layer.prototype.loadPoints = function () {
-    return $.when($);
+    var outer = this;
+    var layerGroup;
+
+    if (this.config.cluster) {
+        layerGroup = L.markerClusterGroup();
+        layerGroup.addTo(this.leafletLayer);
+    } else {
+        layerGroup = this.leafletLayer;
+    }
+
+    this.source.forEach(function (row) {
+        var lat = row.get("#geo+lat");
+        var lon = row.get("#geo+lon");
+        L.marker([lat, lon]).addTo(layerGroup);
+    });
+
+    return $.when($); // empty promise (resolves instantly)
 };
 
 /**
@@ -111,10 +149,10 @@ hxlmaps.Layer.prototype.loadAreas = function () {
                 entry.leafletLayer = L.geoJSON(entry.geojson, {
                     style: doStyle
                 });
-                entry.leafletLayer.addTo(outer.map);
+                outer.extendBounds(entry.leafletLayer.getBounds());
+                outer.leafletLayer.addLayer(entry.leafletLayer);
             }
         }
-        console.log("GeoJSON loaded");
         deferred.resolve();
     });
 
@@ -236,6 +274,16 @@ hxlmaps.Layer.prototype.setCountries = function () {
     });
 };
 
+/**
+ * Extend this layer's bounds as needed.
+ */
+hxlmaps.Layer.prototype.extendBounds = function (geo) {
+    if (this.bounds) {
+        this.bounds.extend(geo);
+    } else {
+        this.bounds = L.latLngBounds(geo);
+    }
+};
 
 /**
  * Create a style for an area.
