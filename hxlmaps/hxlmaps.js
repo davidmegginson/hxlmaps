@@ -111,18 +111,21 @@ hxlmaps.Layer.prototype.load = function () {
     this.leafletLayer = L.layerGroup();
 
     this.loadHXL().done(function () {
+        var promise;
         outer.setType();
         if (outer.config.type == "points") {
-            outer.loadPoints().done(function () {
-                deferred.resolve();
-            });
+            promise = outer.loadPoints();
+        } else if (outer.config.type == "heat") {
+            promise = outer.loadHeat();
         } else if (outer.config.type == "areas") {
-            outer.loadAreas().done(function () {
-                deferred.resolve();
-            });
+            promise = outer.loadAreas();
         } else {
             console.error("Bad layer type", outer.config.type);
+            promise = $.when($);
         }
+        promise.done(function () {
+            deferred.resolve();
+        });
     });
 
     return deferred.promise();
@@ -171,6 +174,27 @@ hxlmaps.Layer.prototype.loadPoints = function () {
         marker.bindPopup(label);
 
     });
+
+    return $.when($); // empty promise (resolves instantly)
+};
+
+
+/**
+ * Load as a heatmap
+ */
+hxlmaps.Layer.prototype.loadHeat = function () {
+    var outer = this;
+    var points = [];
+
+    this.source.forEach(function(row) {
+        var lat = row.get("#geo+lat");
+        var lon = row.get("#geo+lon");
+        points.push([lat, lon, 1.0]);
+    });
+
+    L.heatLayer(points, {
+        gradient: {0.1: 'yellow', 0.3: 'orange', 1: 'red'}
+    }).addTo(this.leafletLayer);
 
     return $.when($); // empty promise (resolves instantly)
 };

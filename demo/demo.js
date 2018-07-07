@@ -7,7 +7,8 @@ var mapConfig = {
             name: "ACLED conflict locations",
             url: "https://data.humdata.org/dataset/acled-data-for-mali",
             unit: "incidents",
-            cluster: true
+            cluster: true,
+            type: "heat"
         },
         {
             name: "Mali 3W",
