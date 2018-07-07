@@ -31,6 +31,19 @@ hxlmaps.Map = function(mapId, mapConfig) {
         // the Leaflet map object
         this.map = L.map(mapId, {maxZoom: 18}).setView([0, 0], 6);
 
+        // load each tile layer
+        this.tileLayers = {};
+        hxlmaps.tileInfo.forEach(function (tileConfig) {
+            var tileLayer = undefined;
+            if (tileConfig.url) {
+               tileLayer =  L.tileLayer(tileConfig.url, tileConfig.properties);
+            } else {
+                tileLayer = L.layerGroup();
+            }
+            outer.tileLayers[tileConfig.name] = tileLayer;
+        });
+        this.tileLayers[hxlmaps.tileInfo[0].name].addTo(this.map);
+
         // load each HXL-based layer
         if (mapConfig.layers) {
             mapConfig.layers.forEach(function(layerConfig) {
@@ -53,7 +66,16 @@ hxlmaps.Map = function(mapId, mapConfig) {
                 console.error("No layers defined");
             }
             console.log("All layers loaded", outer.layers);
+
+            // Show the map in bounds
             outer.snapToBounds();
+
+            // Add a layer selector
+            overlays = {}
+            outer.layers.forEach(function (layer) {
+                overlays[layer.config.name] = layer.leafletLayer;
+            });
+            L.control.layers(outer.tileLayers, overlays).addTo(outer.map);
         });
 
     } else {
@@ -189,11 +211,11 @@ hxlmaps.Layer.prototype.loadHeat = function () {
     this.source.forEach(function(row) {
         var lat = row.get("#geo+lat");
         var lon = row.get("#geo+lon");
-        points.push([lat, lon, 1.0]);
+        points.push([lat, lon]);
     });
 
     L.heatLayer(points, {
-        gradient: {0.1: 'yellow', 0.3: 'orange', 1: 'red'}
+        minOpacity: 0.4
     }).addTo(this.leafletLayer);
 
     return $.when($); // empty promise (resolves instantly)
@@ -396,8 +418,12 @@ hxlmaps.Layer.prototype.addAreaUI = function (feature, layer) {
     var row = hxlmaps.fuzzyPcodeLookup(pcode, this.hxlPcodeMap);
     var name = row.get('#*+name');
     var count = row.get('#meta+count');
+    var unit = this.config.unit;
+    if (!unit) {
+        unit = "entries";
+    }
     // FIXME need to escape
-    layer.bindTooltip(name + ' ' + count);
+    layer.bindTooltip(name + ' ' + count + ' ' + unit);
 };
 
 
@@ -507,6 +533,27 @@ hxlmaps.fuzzyPcodeLookup = function(pcode, obj) {
 ////////////////////////////////////////////////////////////////////////
 // Static data
 ////////////////////////////////////////////////////////////////////////
+
+/**
+ * Tile data
+ */
+hxlmaps.tileInfo = [
+    {
+        name: "OpenStreetMap",
+        url: 'https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token=pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXVycTA2emYycXBndHRqcmZ3N3gifQ.rJcFIG214AriISLbB6B5aw',
+        properties: {
+            maxZoom: 18,
+            attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors, ' +
+                '<a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, ' +
+                'Imagery © <a href="https://www.mapbox.com/">Mapbox</a>',
+            id: 'mapbox.streets'
+        }
+    },
+    {
+        name: "None"
+    }
+];
+
 
 /**
  * Map from the admin levels used by HXL to those used by iTOS
