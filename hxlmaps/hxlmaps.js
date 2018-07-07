@@ -147,7 +147,29 @@ hxlmaps.Layer.prototype.loadPoints = function () {
     this.source.forEach(function (row) {
         var lat = row.get("#geo+lat");
         var lon = row.get("#geo+lon");
-        L.marker([lat, lon]).addTo(layerGroup);
+        var marker = L.marker([lat, lon]);
+
+        marker.addTo(layerGroup);
+
+        // set up labels
+        var label = "<table>";
+        for (var i = 0; i < row.values.length; i++) {
+            if (row.columns[i]) {
+                var name = row.columns[i].header;
+                var value = row.values[i];
+                if (!name) {
+                    name = row.columns[i].displayTag;
+                }
+                if (name && (value != "")) {
+                    // FIXME! need to escape
+                    label += "<tr><th>" + name + "</th><td>" + row.values[i] + "</td></tr>";
+                }
+                marker.bindPopup(label);
+            }
+        }
+        label += "</table>";
+        marker.bindPopup(label);
+
     });
 
     return $.when($); // empty promise (resolves instantly)
@@ -162,25 +184,42 @@ hxlmaps.Layer.prototype.loadAreas = function () {
     var outer = this;
     var deferred = $.Deferred();
     
-    this.source = this.source.count([this.config.adminLevel + "+name", this.config.adminLevel + "+code"]);
-    this.setCountries();
     if (!this.config.colorMap) {
         this.config.colorMap = [
-            { percentage: 0.0, color: { r: 0x00, g: 0x00, b: 0x00 } },
-            { percentage: 1.0, color: { r: 0x00, g: 0xaa, b: 0xff } }
+            { percentage: 0.0, color: { r: 0x80, g: 0xd0, b: 0xc7 } },
+            { percentage: 1.0, color: { r: 0x13, g: 0x54, b: 0x7a } }
         ];
     }
+
+    this.source = this.source.count([this.config.adminLevel + "+name", this.config.adminLevel + "+code"]);
+    
+    this.hxlPcodeMap = {};
+    this.source.forEach(function (row) {
+        var pcode = row.get('#*+code');
+        if (pcode) {
+            pcode = pcode.toUpperCase();
+            outer.hxlPcodeMap[pcode] = row;
+        } else {
+            console.info("No p-code in row", row);
+        }
+    });
+
+    this.setCountries();
 
     var promise = this.loadGeoJSON();
 
     promise.done(function () {
         for (var key in outer.countryMap) {
-            function doStyle (feature) {
+            function doOnEachFeature (feature, layer) {
+                outer.addAreaUI(feature, layer);
+            }
+            function doStyle (feature, layer) {
                 return outer.makeAreaStyle(feature);
             }
             var entry = outer.countryMap[key];
             if (entry.geojson) {
                 entry.leafletLayer = L.geoJSON(entry.geojson, {
+                    onEachFeature: doOnEachFeature,
                     style: doStyle
                 });
                 outer.extendBounds(entry.leafletLayer.getBounds());
@@ -326,6 +365,19 @@ hxlmaps.Layer.prototype.extendBounds = function (geo) {
 
 
 /**
+ * Add a popup to a GeoJSON feature layer
+ */
+hxlmaps.Layer.prototype.addAreaUI = function (feature, layer) {
+    var pcode = feature.properties[this.adminInfo.property];
+    var row = hxlmaps.fuzzyPcodeLookup(pcode, this.hxlPcodeMap);
+    var name = row.get('#*+name');
+    var count = row.get('#meta+count');
+    // FIXME need to escape
+    layer.bindTooltip(name + ' ' + count);
+};
+
+
+/**
  * Create a style for an area.
  * Attributes will be in feature.properties
  * @param feature: a GeoJSON feature
@@ -333,40 +385,21 @@ hxlmaps.Layer.prototype.extendBounds = function (geo) {
  */
 hxlmaps.Layer.prototype.makeAreaStyle = function (feature) {
 
-    var outer = this;
-    
-    // set up a map of values if it does not already exist
-    if (!this.valueMap) {
-        this.valueMap = {};
-        this.source.forEach(function (row) {
-            var name = row.get('#*+name');
-            var pcode = row.get('#*+code');
-            var count = row.get('#meta+count');
-            if (pcode) {
-                pcode = pcode.toUpperCase();
-                outer.valueMap[pcode] = {
-                    name: name,
-                    pcode: pcode,
-                    count: count
-                };
-            } else {
-                console.info("No p-code in row", name, count);
-            }
-        });
-    }
-
     // get the maximum value if we don't already have it
     if (!this.maxValue) {
-        this.maxValue = this.source.getMax('#meta+count');
+        this.maxValue = 0 + this.source.getMax('#meta+count');
     }
 
     // figure out the weighting of this area, and calculate a color
     var pcode = feature.properties[this.adminInfo.property];
-    var info = hxlmaps.fuzzyPcodeLookup(pcode, this.valueMap);
-    var percentage = (0+info.count) / (0+this.maxValue);
+    var row = hxlmaps.fuzzyPcodeLookup(pcode, this.hxlPcodeMap);
+    var count = 0 + row.get('#meta+count');
+    var percentage = count / this.maxValue;
     var color = hxlmaps.genColor(percentage, this.config.colorMap);
 
-    return {color: color};
+    return {
+        color: color
+    };
 };
 
 
