@@ -31,6 +31,7 @@ hxlmaps.Map = function(mapId, mapConfig) {
         // the Leaflet map object
         this.map = L.map(mapId, {maxZoom: 18}).setView([0, 0], 6);
 
+
         // load each tile layer
         this.tileLayers = {};
         hxlmaps.tileInfo.forEach(function (tileConfig) {
@@ -44,9 +45,13 @@ hxlmaps.Map = function(mapId, mapConfig) {
         });
         this.tileLayers[hxlmaps.tileInfo[0].name].addTo(this.map);
 
+        hxlmaps.loadItosCountryInfo("MLI").done(function (json) {
+            console.log("Info", json);
+        });
+
         // temporary: load Mali as baseline
         ["#country", "#adm1", "#adm2", "#adm3"].forEach(function(adminLevel) {
-            promise = hxlmaps.loadItos('MLI', adminLevel);
+            promise = hxlmaps.loadItosLevel('MLI', adminLevel);
             promise.done(function (geojson) {
                 var layer = L.geoJSON(geojson, {
                     fill: null,
@@ -333,7 +338,7 @@ hxlmaps.Layer.prototype.loadGeoJSON = function () {
     var countries = Object.keys(this.countryMap);
     var promises = []
     countries.forEach(function (countryCode) {
-        var promise = hxlmaps.loadItos(countryCode, outer.config.adminLevel);
+        var promise = hxlmaps.loadItosLevel(countryCode, outer.config.adminLevel);
         promises.push(promise.done(function (geojson) {
             outer.countryMap[countryCode]["geojson"] = geojson;
         }));
@@ -545,19 +550,33 @@ hxlmaps.fuzzyPcodeLookup = function(pcode, obj) {
 ////////////////////////////////////////////////////////////////////////
 
 /**
+ * Load list of admin levels for a country.
+ */
+hxlmaps.loadItosCountryInfo = function(countryCode) {
+    var deferred = $.Deferred();
+    var urlPattern = "http://gistmaps.itos.uga.edu/arcgis/rest/services/COD_External/{{country}}_pcode/MapServer?f=json";
+    var url = urlPattern.replace("{{country}}", countryCode.toUpperCase());
+    var promise = jQuery.getJSON(url);
+    promise.done(function (json) {
+        deferred.resolve(json.layers);
+    });
+    return deferred.promise();
+};
+
+/**
  * Load GeoJSON from iTOS
  * @param countryCode: an ISO3 country code
  * @param adminLevel: a HXL admin level (e.g. #country, #adm3)
  * @returns: the promise for loading the GeoJSON.
  */
-hxlmaps.loadItos = function (countryCode, adminLevel) {
+hxlmaps.loadItosLevel = function (countryCode, adminLevel) {
     var urlPattern = "https://gistmaps.itos.uga.edu/arcgis/rest/services/COD_External/{{country}}_pcode/MapServer/{{level}}/query?where=1%3D1&outFields=*&f=geojson";
     adminInfo = hxlmaps.itosAdminInfo[adminLevel];
     if (!adminInfo) {
         console.error("Unrecognised admin level", adminLevel);
         return;
     }
-    var url = urlPattern.replace("{{country}}", countryCode);
+    var url = urlPattern.replace("{{country}}", countryCode.toUpperCase());
     url = url.replace("{{level}}", adminInfo.level);
     return jQuery.getJSON(url);
 };
