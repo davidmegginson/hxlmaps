@@ -310,16 +310,17 @@ hxlmaps.Layer.prototype.loadHXL = function() {
     var deferred = $.Deferred();
     
     if (this.config.url) {
-        var url = "https://proxy.hxlstandard.org/data.json?url=" + encodeURIComponent(this.config.url);
-        var promise = jQuery.getJSON(url);
-        promise.fail(function () {
-            console.error("Unable to read HXL dataset", url);
-            deferred.reject();
-        });
-        promise.done(function (source) {
-            outer.source = hxl.wrap(source);
-            deferred.resolve();
-        });
+        hxl.proxy(
+            this.config.url,
+            function (source) {
+                outer.source = source;
+                deferred.resolve();
+            },
+            function (xhr) {
+                console.error("Unable to read HXL dataset", url, xhr);
+                deferred.reject()
+            }
+        );
     } else {
         console.error("No dataset specified for layer", this.config);
         deferred.reject();
