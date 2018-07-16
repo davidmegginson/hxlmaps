@@ -29,7 +29,7 @@ hxlmaps.cods.getPcodeCountry = function(pcode) {
  */
 hxlmaps.cods.fuzzyPcodeLookup = function(pcode, obj) {
     var iso2, iso3, newPcode;
-    
+
     pcode = pcode.toUpperCase();
 
     // try a straight lookup

@@ -45,22 +45,20 @@ hxlmaps.Map = function(mapId, mapConfig) {
         });
         this.tileLayers[hxlmaps.tileInfo[0].name].addTo(this.map);
 
-        hxlmaps.cods.loadItosCountryInfo("MLI").done(function (json) {
-            console.log("Info", json);
-        });
-
         // temporary: load Mali as baseline
-        ["#country", "#adm1", "#adm2", "#adm3"].forEach(function(adminLevel) {
-            promise = hxlmaps.cods.loadItosLevel('MLI', adminLevel);
-            promise.done(function (geojson) {
-                var layer = L.geoJSON(geojson, {
-                    fill: null,
-                    weight: 1
+        if (false) {
+            ["#country", "#adm1", "#adm2", "#adm3"].forEach(function(adminLevel) {
+                promise = hxlmaps.cods.loadItosLevel('NGA', adminLevel);
+                promise.done(function (geojson) {
+                    var layer = L.geoJSON(geojson, {
+                        fill: null,
+                        weight: 1
+                    });
+                    outer.tileLayers["Mali " + adminLevel] = layer;
                 });
-                outer.tileLayers["Mali " + adminLevel] = layer;
+                promises.push(promise);
             });
-            promises.push(promise);
-        });
+        }
 
         // load each HXL-based layer
         if (mapConfig.layers) {
@@ -83,7 +81,6 @@ hxlmaps.Map = function(mapId, mapConfig) {
             if (outer.layers.length == 0) {
                 console.error("No layers defined");
             }
-            console.log("All layers loaded", outer.layers);
 
             // Show the map in bounds
             outer.snapToBounds();
@@ -92,7 +89,7 @@ hxlmaps.Map = function(mapId, mapConfig) {
             overlays = {}
             outer.layers.forEach(function (layer) {
                 overlays[layer.config.name] = layer.leafletLayer;
-            });
+           });
             L.control.layers(outer.tileLayers, overlays, {
                 sort: true,
                 autoZIndex: true
@@ -258,9 +255,24 @@ hxlmaps.Layer.prototype.loadAreas = function () {
         ];
     }
 
+    if (!this.config.aggregateType) {
+        var patterns = ["#reached", "#targeted", "#inneed", "#affected", "#population", "#value", "#indicator+num"];
+        this.config.aggregateType = "count";
+        for (var i = 0; i < patterns.length; i++) {
+            if (hxl.matchList(patterns[i], this.source.columns)) {
+                this.config.aggregateType = "sum";
+                this.config.aggregateColumn = patterns[i];
+                break;
+            }
+        }
+    }
+
     this.adminInfo = hxlmaps.cods.itosAdminInfo[this.config.adminLevel];
-    this.source = this.source.count([this.config.adminLevel + "+name", this.config.adminLevel + "+code"]);
-    
+    this.source = this.source.count(
+        [this.config.adminLevel + "+name", this.config.adminLevel + "+code"],
+        this.config.aggregateColumn
+    );
+
     this.hxlPcodeMap = {};
     this.source.forEach(function (row) {
         var pcode = row.get('#*+code');
@@ -428,15 +440,23 @@ hxlmaps.Layer.prototype.extendBounds = function (geo) {
  */
 hxlmaps.Layer.prototype.addAreaUI = function (feature, layer) {
     var pcode = feature.properties[this.adminInfo.property];
-    var row = hxlmaps.cods.fuzzyPcodeLookup(pcode, this.hxlPcodeMap);
-    var name = row.get('#*+name');
-    var count = row.get('#meta+count');
-    var unit = this.config.unit;
-    if (!unit) {
-        unit = "entries";
+    if (pcode) {
+        var row = hxlmaps.cods.fuzzyPcodeLookup(pcode, this.hxlPcodeMap);
+        if (row) {
+            var name = row.get('#*+name');
+            if (this.config.aggregateType == "sum") {
+                var count = row.get("#*+sum");
+            } else {
+                var count = row.get('#meta+count');
+            }
+            var unit = this.config.unit;
+            if (!unit) {
+                unit = "entries";
+            }
+            // FIXME need to escape
+            layer.bindTooltip(name + ' ' + count + ' ' + unit);
+        }
     }
-    // FIXME need to escape
-    layer.bindTooltip(name + ' ' + count + ' ' + unit);
 };
 
 
@@ -450,20 +470,42 @@ hxlmaps.Layer.prototype.makeAreaStyle = function (feature) {
 
     // get the maximum value if we don't already have it
     if (!this.maxValue) {
-        this.maxValue = 0 + this.source.getMax('#meta+count');
+        if (this.config.aggregateType == "sum") {
+            this.maxValue = 0 + this.source.getMax("#*+sum");
+        } else {
+            this.maxValue = 0 + this.source.getMax('#meta+count');
+        }
     }
 
     // figure out the weighting of this area, and calculate a color
     var pcode = feature.properties[this.adminInfo.property];
-    var row = hxlmaps.cods.fuzzyPcodeLookup(pcode, this.hxlPcodeMap);
-    var count = 0 + row.get('#meta+count');
-    var percentage = count / this.maxValue;
-    var color = hxlmaps.genColor(percentage, this.config.colorMap);
+    if (pcode) {
+        var row = hxlmaps.cods.fuzzyPcodeLookup(pcode, this.hxlPcodeMap);
+        if (row) {
+            if (this.config.aggregateType == "sum") {
+                var count = 0 + row.get("#*+sum");
+            } else {
+                var count = 0 + row.get('#meta+count');
+            }
+            var percentage = count / this.maxValue;
+            var color = hxlmaps.genColor(percentage, this.config.colorMap);
+            return {
+                stroke: true,
+                color: color
+            };
+        } else {
+            console.log("Skipping pcode (no HXL data)", pcode);
+            return {
+                stroke: false
+            };
+        }
+    } else {
+        console.info("Feature has no pcode", this.adminInfo.property, feature);
+        return {
+            stroke: false
+        };
+    }
 
-    return {
-        stroke: false,
-        color: color
-    };
 };
 
 
