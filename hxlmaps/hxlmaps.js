@@ -453,9 +453,12 @@ hxlmaps.Layer.prototype.addAreaUI = function (feature, layer) {
             if (!unit) {
                 unit = "entries";
             }
-            // FIXME need to escape
-            layer.bindTooltip(name + ' ' + count + ' ' + unit);
+            var text = name + ' ' + count + ' ' + unit;
+        } else {
+            var text = name = '(no data available)';
         }
+        // FIXME need to escape
+        layer.bindTooltip(text);
     }
 };
 
@@ -490,13 +493,12 @@ hxlmaps.Layer.prototype.makeAreaStyle = function (feature) {
             var percentage = count / this.maxValue;
             var color = hxlmaps.genColor(percentage, this.config.colorMap);
             return {
-                stroke: true,
                 color: color
             };
         } else {
-            console.log("Skipping pcode (no HXL data)", pcode);
             return {
-                stroke: false
+                color: "rgb(128, 128, 128)",
+                opacity: 0.25
             };
         }
     } else {

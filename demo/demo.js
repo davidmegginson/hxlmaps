@@ -24,7 +24,12 @@ var mapConfig = {
         */
         {
             name: "Nigeria DTM",
-            url: "https://beta.proxy.hxlstandard.org/data/e2b997.csv"
+            url: "https://beta.proxy.hxlstandard.org/data/e2b997.csv",
+            colorMap: [
+                { percentage: 0.0, color: { r: 0xff, g: 0xff, b: 0x00 } },
+                { percentage: 1.0, color: { r: 0xff, g: 0x00, b: 0x00 } }
+            ],
+            unit: "displaced households surveyed"
         }
     ]
 }

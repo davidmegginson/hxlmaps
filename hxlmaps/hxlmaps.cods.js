@@ -70,10 +70,9 @@ hxlmaps.cods.loadItosCountryInfo = function(countryCode) {
     var urlPattern = "http://gistmaps.itos.uga.edu/arcgis/rest/services/COD_External/{{country}}_pcode/MapServer?f=json";
     var url = urlPattern.replace("{{country}}", countryCode.toUpperCase());
     var promise = jQuery.getJSON(url);
-    promise.done(function (json) {
+    return promise.done(function (json) {
         deferred.resolve(json.layers);
     });
-    return deferred.promise();
 };
 
 /**
@@ -83,15 +82,31 @@ hxlmaps.cods.loadItosCountryInfo = function(countryCode) {
  * @returns: the promise for loading the GeoJSON.
  */
 hxlmaps.cods.loadItosLevel = function (countryCode, adminLevel) {
-    var urlPattern = "https://gistmaps.itos.uga.edu/arcgis/rest/services/COD_External/{{country}}_pcode/MapServer/{{level}}/query?where=1%3D1&outFields=*&f=geojson";
-    adminInfo = hxlmaps.cods.itosAdminInfo[adminLevel];
+
+    var adminInfo = hxlmaps.cods.itosAdminInfo[adminLevel];
     if (!adminInfo) {
         console.error("Unrecognised admin level", adminLevel);
         return;
     }
-    var url = urlPattern.replace("{{country}}", countryCode.toUpperCase());
-    url = url.replace("{{level}}", adminInfo.level);
-    return jQuery.getJSON(url);
+    
+    var promise = hxlmaps.cods.loadItosCountryInfo(countryCode);
+
+    return promise.then(countryInfo => {
+        var levelId;
+        for (var i = 0; i < countryInfo.layers.length; i++) {
+            layerInfo = countryInfo.layers[i];
+            if (adminInfo.layerName == layerInfo.name) {
+                levelId = layerInfo.id;
+                console.log(levelId);
+                break;
+            }
+        }
+        var urlPattern = "https://gistmaps.itos.uga.edu/arcgis/rest/services/COD_External/{{country}}_pcode/MapServer/{{level}}/query?where=1%3D1&outFields=*&f=geojson";
+        var url = urlPattern.replace("{{country}}", countryCode.toUpperCase());
+        url = url.replace("{{level}}", levelId);
+        return jQuery.getJSON(url);
+    });
+
 };
 
 /**
@@ -100,26 +115,32 @@ hxlmaps.cods.loadItosLevel = function (countryCode, adminLevel) {
 hxlmaps.cods.itosAdminInfo = {
     "#country": {
         level: 1,
+        layerName: "Admin0",
         property: "admin0Pcode"
     },
     "#adm1": {
         level: 2,
+        layerName: "Admin1",
         property: "admin1Pcode"
     },
     "#adm2": {
         level: 3,
+        layerName: "Admin2",
         property: "admin2Pcode"
     },
     "#adm3": {
         level: 4,
+        layerName: "Admin3",
         property: "admin3Pcode"
     },
     "#adm4": {
         level: 5,
+        layerName: "Admin4",
         property: "admin4Pcode"
     },
     "#adm5": {
         level: 6,
+        layerName: "Admin5",
         property: "admin5Pcode"
     }
 };
