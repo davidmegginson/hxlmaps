@@ -67,7 +67,7 @@ hxlmaps.cods.fuzzyPcodeLookup = function(pcode, obj) {
  */
 hxlmaps.cods.loadItosCountryInfo = function(countryCode) {
     var deferred = $.Deferred();
-    var urlPattern = "http://gistmaps.itos.uga.edu/arcgis/rest/services/COD_External/{{country}}_pcode/MapServer?f=json";
+    var urlPattern = "https://gistmaps.itos.uga.edu/arcgis/rest/services/COD_External/{{country}}_pcode/MapServer?f=json";
     var url = urlPattern.replace("{{country}}", countryCode.toUpperCase());
     var promise = jQuery.getJSON(url);
     return promise.done(function (json) {
