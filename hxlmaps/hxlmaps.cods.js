@@ -97,7 +97,6 @@ hxlmaps.cods.loadItosLevel = function (countryCode, adminLevel) {
             layerInfo = countryInfo.layers[i];
             if (adminInfo.layerName == layerInfo.name) {
                 levelId = layerInfo.id;
-                console.log(levelId);
                 break;
             }
         }
