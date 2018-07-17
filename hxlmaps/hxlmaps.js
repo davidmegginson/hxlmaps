@@ -269,17 +269,11 @@ hxlmaps.Layer.prototype.loadAreas = function () {
 
     promise.done(() => {
         for (var key in this.countryMap) {
-            var doOnEachFeature = (feature, layer) => {
-                this.addAreaUI(feature, layer);
-            };
-            var doStyle = (feature, layer) => {
-                return this.makeAreaStyle(feature);
-            };
             var entry = this.countryMap[key];
             if (entry.geojson) {
                 entry.leafletLayer = L.geoJSON(entry.geojson, {
-                    onEachFeature: doOnEachFeature,
-                    style: doStyle
+                    onEachFeature: (feature, layer) => { this.addAreaUI(feature, layer); },
+                    style: (feature) => { return this.makeAreaStyle(feature); }
                 });
                 this.extendBounds(entry.leafletLayer.getBounds());
                 this.leafletLayer.addLayer(entry.leafletLayer);
