@@ -70,7 +70,7 @@ hxlmaps.cods.loadItosCountryInfo = function(countryCode) {
     var urlPattern = "https://gistmaps.itos.uga.edu/arcgis/rest/services/COD_External/{{country}}_pcode/MapServer?f=json";
     var url = urlPattern.replace("{{country}}", countryCode.toUpperCase());
     var promise = jQuery.getJSON(url);
-    return promise.done(function (json) {
+    return promise.done(json => {
         deferred.resolve(json.layers);
     });
 };
@@ -404,7 +404,7 @@ hxlmaps.cods.countryCodes = [
 // set up the lookup tables
 hxlmaps.cods.iso2map = {};
 hxlmaps.cods.iso3map = {};
-hxlmaps.cods.countryCodes.forEach(function (entry) {
+hxlmaps.cods.countryCodes.forEach(entry => {
     hxlmaps.cods.iso2map[entry[0]] = entry[1];
     hxlmaps.cods.iso3map[entry[1]] = entry[0];
 });
