@@ -16,7 +16,6 @@ var hxlmaps = {
  * @param mapConfig: if specified, a JSON configuration for the map.
  */
 hxlmaps.Map = function(mapId, mapConfig) {
-    var outer = this;
 
     /**
      * hxlmaps.HXLLayer objects
@@ -34,66 +33,51 @@ hxlmaps.Map = function(mapId, mapConfig) {
 
         // load each tile layer
         this.tileLayers = {};
-        hxlmaps.tileInfo.forEach(function (tileConfig) {
+        hxlmaps.tileInfo.forEach(tileConfig => {
             var tileLayer = undefined;
             if (tileConfig.url) {
                tileLayer =  L.tileLayer(tileConfig.url, tileConfig.properties);
             } else {
                 tileLayer = L.layerGroup();
             }
-            outer.tileLayers[tileConfig.name] = tileLayer;
+            this.tileLayers[tileConfig.name] = tileLayer;
         });
         this.tileLayers[hxlmaps.tileInfo[0].name].addTo(this.map);
 
-        // temporary: load Mali as baseline
-        if (false) {
-            ["#country", "#adm1", "#adm2", "#adm3"].forEach(function(adminLevel) {
-                promise = hxlmaps.cods.loadItosLevel('NGA', adminLevel);
-                promise.done(function (geojson) {
-                    var layer = L.geoJSON(geojson, {
-                        fill: null,
-                        weight: 1
-                    });
-                    outer.tileLayers["Mali " + adminLevel] = layer;
-                });
-                promises.push(promise);
-            });
-        }
-
         // load each HXL-based layer
         if (mapConfig.layers) {
-            mapConfig.layers.forEach(function(layerConfig) {
-                var layer = new hxlmaps.Layer(outer.map, layerConfig);
+            mapConfig.layers.forEach(layerConfig => {
+                var layer = new hxlmaps.Layer(this.map, layerConfig);
                 var promise = layer.load();
                 promises.push(promise);
-                promise.done(function () {
+                promise.done(() => {
                     if (layer.bounds) {
-                        outer.extendBounds(layer.bounds);
+                        this.extendBounds(layer.bounds);
                     }
-                    outer.map.addLayer(layer.leafletLayer);
+                    this.map.addLayer(layer.leafletLayer);
                 });
-                outer.layers.push(layer);
+                this.layers.push(layer);
             });
         }
 
         // this runs only after all layers are loaded
-        $.when.apply($, promises).done(function () {
-            if (outer.layers.length == 0) {
+        $.when.apply($, promises).done(() => {
+            if (this.layers.length == 0) {
                 console.error("No layers defined");
             }
 
             // Show the map in bounds
-            outer.snapToBounds();
+            this.snapToBounds();
 
             // Add a layer selector
             overlays = {}
-            outer.layers.forEach(function (layer) {
+            this.layers.forEach(layer => {
                 overlays[layer.config.name] = layer.leafletLayer;
-           });
-            L.control.layers(outer.tileLayers, overlays, {
+            });
+            L.control.layers(this.tileLayers, overlays, {
                 sort: true,
                 autoZIndex: true
-            }).addTo(outer.map);
+            }).addTo(this.map);
         });
 
     } else {
@@ -145,25 +129,24 @@ hxlmaps.Layer = function(map, layerConfig) {
  * @returns: a promise that resolves when the layer is loaded into the map
  */
 hxlmaps.Layer.prototype.load = function () {
-    var outer = this;
     var deferred = $.Deferred();
 
     this.leafletLayer = L.layerGroup();
 
-    this.loadHXL().done(function () {
+    this.loadHXL().done(() => {
         var promise;
-        outer.setType();
-        if (outer.config.type == "points") {
-            promise = outer.loadPoints();
-        } else if (outer.config.type == "heat") {
-            promise = outer.loadHeat();
-        } else if (outer.config.type == "areas") {
-            promise = outer.loadAreas();
+        this.setType();
+        if (this.config.type == "points") {
+            promise = this.loadPoints();
+        } else if (this.config.type == "heat") {
+            promise = this.loadHeat();
+        } else if (this.config.type == "areas") {
+            promise = this.loadAreas();
         } else {
-            console.error("Bad layer type", outer.config.type);
+            console.error("Bad layer type", this.config.type);
             promise = $.when($);
         }
-        promise.done(function () {
+        promise.done(() => {
             deferred.resolve();
         });
     });
@@ -177,7 +160,6 @@ hxlmaps.Layer.prototype.load = function () {
  * @returns: a promise that resolves when the points are loaded into the map
  */
 hxlmaps.Layer.prototype.loadPoints = function () {
-    var outer = this;
     var layerGroup;
 
     if (this.config.cluster) {
@@ -187,7 +169,7 @@ hxlmaps.Layer.prototype.loadPoints = function () {
         layerGroup = this.leafletLayer;
     }
 
-    this.source.forEach(function (row) {
+    this.source.forEach(row => {
         var lat = row.get("#geo+lat");
         var lon = row.get("#geo+lon");
         var marker = L.marker([lat, lon]);
@@ -222,10 +204,9 @@ hxlmaps.Layer.prototype.loadPoints = function () {
  * Load as a heatmap
  */
 hxlmaps.Layer.prototype.loadHeat = function () {
-    var outer = this;
     var points = [];
 
-    this.source.forEach(function(row) {
+    this.source.forEach(row => {
         var lat = row.get("#geo+lat");
         var lon = row.get("#geo+lon");
         points.push([lat, lon]);
@@ -244,7 +225,6 @@ hxlmaps.Layer.prototype.loadHeat = function () {
  * @returns: a promise that resolves when the areas are loaded into the map
  */
 hxlmaps.Layer.prototype.loadAreas = function () {
-    var outer = this;
     var deferred = $.Deferred();
     
     if (!this.config.colorMap) {
@@ -273,11 +253,11 @@ hxlmaps.Layer.prototype.loadAreas = function () {
     );
 
     this.hxlPcodeMap = {};
-    this.source.forEach(function (row) {
+    this.source.forEach(row => {
         var pcode = row.get('#*+code');
         if (pcode) {
             pcode = pcode.toUpperCase();
-            outer.hxlPcodeMap[pcode] = row;
+            this.hxlPcodeMap[pcode] = row;
         } else {
             console.info("No p-code in row", row);
         }
@@ -287,22 +267,22 @@ hxlmaps.Layer.prototype.loadAreas = function () {
 
     var promise = this.loadGeoJSON();
 
-    promise.done(function () {
-        for (var key in outer.countryMap) {
-            function doOnEachFeature (feature, layer) {
-                outer.addAreaUI(feature, layer);
-            }
-            function doStyle (feature, layer) {
-                return outer.makeAreaStyle(feature);
-            }
-            var entry = outer.countryMap[key];
+    promise.done(() => {
+        for (var key in this.countryMap) {
+            var doOnEachFeature = (feature, layer) => {
+                this.addAreaUI(feature, layer);
+            };
+            var doStyle = (feature, layer) => {
+                return this.makeAreaStyle(feature);
+            };
+            var entry = this.countryMap[key];
             if (entry.geojson) {
                 entry.leafletLayer = L.geoJSON(entry.geojson, {
                     onEachFeature: doOnEachFeature,
                     style: doStyle
                 });
-                outer.extendBounds(entry.leafletLayer.getBounds());
-                outer.leafletLayer.addLayer(entry.leafletLayer);
+                this.extendBounds(entry.leafletLayer.getBounds());
+                this.leafletLayer.addLayer(entry.leafletLayer);
             }
         }
         deferred.resolve();
@@ -317,17 +297,16 @@ hxlmaps.Layer.prototype.loadAreas = function () {
  * @returns: a promise that resolves when the HXL data is loaded.
  */
 hxlmaps.Layer.prototype.loadHXL = function() {
-    var outer = this;
     var deferred = $.Deferred();
     
     if (this.config.url) {
         hxl.proxy(
             this.config.url,
-            function (source) {
-                outer.source = source;
+            (source) => {
+                this.source = source;
                 deferred.resolve();
             },
-            function (xhr) {
+            (xhr) => {
                 console.error("Unable to read HXL dataset", url, xhr);
                 deferred.reject()
             }
@@ -346,16 +325,15 @@ hxlmaps.Layer.prototype.loadHXL = function() {
  * @returns: a promise that resolves when the GeoJSON is loaded into the map.
  */
 hxlmaps.Layer.prototype.loadGeoJSON = function () {
-    var outer = this;
     var countries = Object.keys(this.countryMap);
     var promises = []
-    countries.forEach(function (countryCode) {
-        var promise = hxlmaps.cods.loadItosLevel(countryCode, outer.config.adminLevel);
-        promises.push(promise.done(function (geojson) {
-            outer.countryMap[countryCode]["geojson"] = geojson;
+    countries.forEach((countryCode) => {
+        var promise = hxlmaps.cods.loadItosLevel(countryCode, this.config.adminLevel);
+        promises.push(promise.done((geojson) => {
+            this.countryMap[countryCode]["geojson"] = geojson;
         }));
-        promise.fail(function () {
-            console.error("Cannot open GeoJSON", countryCode, outer.config.adminLevel);
+        promise.fail(() => {
+            console.error("Cannot open GeoJSON", countryCode, this.config.adminLevel);
         });
     });
     return $.when.apply($, promises); // return a promise that won't complete until all others are done
@@ -399,20 +377,19 @@ hxlmaps.Layer.prototype.setType = function () {
  * Figure out what countries we need to load from iTOS.
  */
 hxlmaps.Layer.prototype.setCountries = function () {
-    var outer = this;
-    outer.countryMap = {};
-    this.source.rows.forEach(function (row) {
+    this.countryMap = {};
+    this.source.rows.forEach((row) => {
         var countryCode = row.get("#country+code");
         if (countryCode) {
-            outer.countryMap[countryCode] = {};
+            this.countryMap[countryCode] = {};
         } else {
-            var pcode = row.get(outer.config.adminLevel + "+code");
+            var pcode = row.get(this.config.adminLevel + "+code");
             if (!pcode) {
                 console.info("No Pcode in row", row);
             } else {
                 var countryCode = hxlmaps.cods.getPcodeCountry(pcode);
                 if (countryCode) {
-                    outer.countryMap[countryCode] = {};
+                    this.countryMap[countryCode] = {};
                 } else {
                     console.error("Cannot guess country for P-code", pcode);
                 }
