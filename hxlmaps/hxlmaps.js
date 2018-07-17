@@ -204,8 +204,7 @@ hxlmaps.Layer.prototype.loadPoints = function () {
                     name = row.columns[i].displayTag;
                 }
                 if (name && (value != "")) {
-                    // FIXME! need to escape
-                    label += "<tr><th>" + name + "</th><td>" + row.values[i] + "</td></tr>";
+                    label += "<tr><th>" + hxlmaps.esc(name) + "</th><td>" + hxlmaps.esc(row.values[i]) + "</td></tr>";
                 }
                 marker.bindPopup(label);
             }
@@ -457,8 +456,7 @@ hxlmaps.Layer.prototype.addAreaUI = function (feature, layer) {
         } else {
             var text = name = '(no data available)';
         }
-        // FIXME need to escape
-        layer.bindTooltip(text);
+        layer.bindTooltip(hxlmaps.esc(text));
     }
 };
 
@@ -516,6 +514,14 @@ hxlmaps.Layer.prototype.makeAreaStyle = function (feature) {
 ////////////////////////////////////////////////////////////////////////
 
 /**
+ * Escape HTML (why isn't this a standard Javascript function?)
+ */
+hxlmaps.esc = function(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
+
+
+/**
  * Generate a colour from a gradiant using a colour map.
  * Adapted from http://stackoverflow.com/posts/7128796/revisions
  * @param percentage: a percentage value from 0.0 to 0.1
@@ -567,3 +573,4 @@ hxlmaps.tileInfo = [
         name: "None"
     }
 ];
+
