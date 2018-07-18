@@ -1,0 +1,17 @@
+section {
+    width: 100%;
+    max-width: 40em;
+    height: 60ex;
+    float: left;
+    padding: 1em;
+}
+
+textarea {
+    width: 100%;
+    height: 60ex;
+}
+
+iframe {
+    width: 100%;
+    height: 100%;
+}
