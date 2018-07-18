@@ -252,6 +252,15 @@ hxlmaps.Layer.prototype.loadAreas = function () {
         this.config.aggregateColumn
     );
 
+    // get the maximum value if we don't already have it
+    if (this.config.aggregateType == "sum") {
+        this.minValue = 0 + this.source.getMin("#*+sum");
+        this.maxValue = 0 + this.source.getMax("#*+sum");
+    } else {
+        this.minValue = 0 + this.source.getMin("#meta+count");
+        this.maxValue = 0 + this.source.getMax('#meta+count');
+    }
+
     this.hxlPcodeMap = {};
     this.source.forEach(row => {
         var pcode = row.get('#*+code');
@@ -279,6 +288,8 @@ hxlmaps.Layer.prototype.loadAreas = function () {
                 this.leafletLayer.addLayer(entry.leafletLayer);
             }
         }
+        // add a colour legend for the layer
+        hxlmaps.makeLegendControl(this.config, this.minValue, this.maxValue).addTo(this.map);
         deferred.resolve();
     });
 
@@ -440,15 +451,6 @@ hxlmaps.Layer.prototype.addAreaUI = function (feature, layer) {
  */
 hxlmaps.Layer.prototype.makeAreaStyle = function (feature) {
 
-    // get the maximum value if we don't already have it
-    if (!this.maxValue) {
-        if (this.config.aggregateType == "sum") {
-            this.maxValue = 0 + this.source.getMax("#*+sum");
-        } else {
-            this.maxValue = 0 + this.source.getMax('#meta+count');
-        }
-    }
-
     // figure out the weighting of this area, and calculate a color
     var pcode = feature.properties[this.adminInfo.property];
     if (pcode) {
@@ -462,12 +464,14 @@ hxlmaps.Layer.prototype.makeAreaStyle = function (feature) {
             var percentage = count / this.maxValue;
             var color = hxlmaps.genColor(percentage, this.config.colorMap);
             return {
+                stroke: false, // FIXME take from config
                 color: color
             };
         } else {
             return {
+                stroke: false, // FIXME take from config
                 color: "rgb(128, 128, 128)",
-                opacity: 0.25
+                opacity: 0.5 // FIXME take from config
             };
         }
     } else {
@@ -524,6 +528,53 @@ hxlmaps.genColor = function(percentage, colorMap, alpha) {
     }
 }
 
+
+/**
+ * Make a leaflet control for the map legend.
+ * @param layerConfig: the layer configuration, including color map.
+ * @param min: the minimum value in the legend.
+ * @param max: the maximum value in the legend.
+ * @returns: a Leaflet control to add to the map.
+ */
+hxlmaps.makeLegendControl = function(layerConfig, min, max) {
+    var control = L.control({position: 'bottomright'});
+    control.onAdd = function(map) {
+        var node = $('<div class="info legend map-legend">');
+
+        // set the transparency to match the map
+        var alpha = layerConfig.alpha;
+        if (!alpha) {
+            alpha = 0.5; // FIXME take from config
+        }
+
+        // show what's being counted
+        if (layerConfig.unit) {
+            var unit = $('<div class="unit">')
+            unit.text("Number of " + layerConfig.unit);
+            node.append(unit);
+        }
+
+        // generate a gradient from 0-100% in 5% steps
+        for (var percentage = 0; percentage <= 1.0; percentage += 0.05) {
+            var color = hxlmaps.genColor(percentage, layerConfig.colorMap, alpha);
+            var box = $('<span class="color" style="background:' + color + '">');
+            box.html("&nbsp;");
+            node.append(box);
+        }
+
+        // add the minimum and maximum absolute values
+        node.append($("<br>")); // FIXME: blech
+        var minValue = $('<div class="min">');
+        minValue.text(min);
+        node.append(minValue);
+        var maxValue = $('<div class="max">');
+        maxValue.text(max);
+        node.append(maxValue);
+        
+        return node.get(0);
+    };
+    return control;
+};
 
 /**
  * Tile data
