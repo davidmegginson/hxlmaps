@@ -6,7 +6,7 @@ var mapConfig = {
         /*
         {
             name: "ACLED conflict locations",
-            url: "https://data.humdata.org/dataset/acled-data-for-mali",
+            url: "https://data.humdata.org/dataset/acled-data-for-nigeria",
             unit: "incidents",
             cluster: true
         },
@@ -22,6 +22,12 @@ var mapConfig = {
             unit: "3W activities"
         }
         */
+        {
+            name: "Airports in Nigeria",
+            url: "https://data.humdata.org/dataset/ourairports-nga",
+            unit: "airports",
+            cluster: false
+        },
         {
             name: "Nigeria DTM",
             url: "https://beta.proxy.hxlstandard.org/data/e2b997.csv",
