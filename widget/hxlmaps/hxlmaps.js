@@ -473,7 +473,7 @@ hxlmaps.Layer.prototype.addAreaUI = function (feature, layer) {
             if (!unit) {
                 unit = "entries";
             }
-            var text = name + ' ' + count + ' ' + unit;
+            var text = name + ': ' + hxlmaps.numfmt(count) + ' ' + unit;
         } else {
             var text = name = '(no data available)';
         }
@@ -569,6 +569,14 @@ hxlmaps.genColor = function(percentage, colorMap, alpha) {
 
 
 /**
+ * Format a number in the default locale
+ */
+hxlmaps.numfmt = function (n) {
+    return new Intl.NumberFormat().format(n);
+};
+
+
+/**
  * Make a leaflet control for the map legend.
  * @param layerConfig: the layer configuration, including color map.
  * @param min: the minimum value in the legend.
@@ -604,10 +612,10 @@ hxlmaps.makeLegendControl = function(layerConfig, min, max) {
         // add the minimum and maximum absolute values
         node.append($("<br>")); // FIXME: blech
         var minValue = $('<div class="min">');
-        minValue.text(min);
+        minValue.text(hxlmaps.numfmt(min));
         node.append(minValue);
         var maxValue = $('<div class="max">');
-        maxValue.text(max);
+        maxValue.text(hxlmaps.numfmt(max));
         node.append(maxValue);
         
         return node.get(0);
