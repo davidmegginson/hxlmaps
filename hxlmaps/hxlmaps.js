@@ -1,6 +1,8 @@
 /**
  * Set up an object to hold the namespace.
  * Everything in this module is under the hxlmaps namespace.
+ * @global
+ * @namespace
  */
 var hxlmaps = {
 };
@@ -12,16 +14,27 @@ var hxlmaps = {
 
 /**
  * Constructor
- * @param mapId: the HTML identifier of the element that will hold the map.
- * @param mapConfig: if specified, a JSON configuration for the map.
+ * @param {string} mapId - The HTML identifier of the element that will hold the map.
+ * @param {Object} mapConfig - A JSON-style configuration for the map.
  */
 hxlmaps.Map = function(mapId, mapConfig) {
 
-    /**
-     * hxlmaps.HXLLayer objects
-     */
+    // check that the target element for the map exists
+    // if not, justifies an alert
+    this.mapNode = document.getElementById(mapId);
+    if (!this.mapNode) {
+        alert("Internal error: map element not found #" + mapId);
+        console.error("Map element note found", mapId);
+        return;
+    }
+
+    // create the loading spinner for later use
+    this.spinner = new Spinner();
+
+    // the hxlmaps.Layer objects (not Leaflet layers)
     this.layers = [];
 
+    // Set up the map
     if (mapConfig) {
         // if the user supplied a configuration file, set up the map
 
@@ -30,6 +43,7 @@ hxlmaps.Map = function(mapId, mapConfig) {
         // the Leaflet map object
         this.map = L.map(mapId, {maxZoom: 18}).setView([0, 0], 6);
 
+        this.spin(true);
 
         // load each tile layer
         this.tileLayers = {};
@@ -62,6 +76,7 @@ hxlmaps.Map = function(mapId, mapConfig) {
 
         // this runs only after all layers are loaded
         $.when.apply($, promises).done(() => {
+            this.spin(false);
             if (this.layers.length == 0) {
                 console.error("No layers defined");
             }
@@ -82,13 +97,28 @@ hxlmaps.Map = function(mapId, mapConfig) {
 
     } else {
         // no config supplied
+        alert("Internal error: no map configuration supplied");
         console.error("No map configuration supplied");
     }
 };
 
 
 /**
+ * Show or hide a loading spinner
+ * @param {boolean} spinStatus - true to start spinning; false to stop.
+ */
+hxlmaps.Map.prototype.spin = function (spinStatus) {
+    if (spinStatus) {
+        this.spinner.spin(this.mapNode);
+    } else {
+        this.spinner.stop();
+    }
+};
+
+
+/**
  * Extend the bounding rectangle of the map, creating if necessary
+ * @param {array} - list of lat/lon pairs to add to the bounds.
  */
 hxlmaps.Map.prototype.extendBounds = function (points) {
     if (this.bounds) {
@@ -106,6 +136,7 @@ hxlmaps.Map.prototype.snapToBounds = function () {
     if (this.bounds) {
         this.map.fitBounds(this.bounds);
     } else {
+        alert("No map data loaded");
         console.error("No bounds to snap to");
     }
 };
@@ -117,7 +148,8 @@ hxlmaps.Map.prototype.snapToBounds = function () {
 
 /**
  * Constructor
- * @param
+ * @param {Leaflet.map} map - the Leaflet map object.
+ * @param {Object} layerConfig - the layer configuration information.
  */
 hxlmaps.Layer = function(map, layerConfig) {
     this.map = map;
@@ -126,7 +158,7 @@ hxlmaps.Layer = function(map, layerConfig) {
 
 /**
  * Set up the layer so that it's ready to display on a map.
- * @returns: a promise that resolves when the layer is loaded into the map
+ * @returns a promise that resolves when the layer is loaded into the map
  */
 hxlmaps.Layer.prototype.load = function () {
     var deferred = $.Deferred();
@@ -157,7 +189,7 @@ hxlmaps.Layer.prototype.load = function () {
 
 /**
  * Continue setup for a points layer.
- * @returns: a promise that resolves when the points are loaded into the map
+ * @returns a promise that resolves when the points are loaded into the map
  */
 hxlmaps.Layer.prototype.loadPoints = function () {
     var layerGroup;
@@ -229,7 +261,7 @@ hxlmaps.Layer.prototype.loadHeat = function () {
 
 /**
  * Continue setup for an areas layer.
- * @returns: a promise that resolves when the areas are loaded into the map
+ * @returns a promise that resolves when the areas are loaded into the map
  */
 hxlmaps.Layer.prototype.loadAreas = function () {
     var deferred = $.Deferred();
@@ -306,7 +338,7 @@ hxlmaps.Layer.prototype.loadAreas = function () {
 
 /**
  * Load the HXL data for the layer.
- * @returns: a promise that resolves when the HXL data is loaded.
+ * @returns a promise that resolves when the HXL data is loaded.
  */
 hxlmaps.Layer.prototype.loadHXL = function() {
     var deferred = $.Deferred();
@@ -334,7 +366,7 @@ hxlmaps.Layer.prototype.loadHXL = function() {
 
 /**
  * Load GeoJSON from iTOS for all required countries.
- * @returns: a promise that resolves when the GeoJSON is loaded into the map.
+ * @returns a promise that resolves when the GeoJSON is loaded into the map.
  */
 hxlmaps.Layer.prototype.loadGeoJSON = function () {
     var countries = Object.keys(this.countryMap);
