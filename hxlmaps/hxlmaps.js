@@ -209,10 +209,17 @@ hxlmaps.Layer.prototype.loadHeat = function () {
     this.source.forEach(row => {
         var lat = row.get("#geo+lat");
         var lon = row.get("#geo+lon");
-        points.push([lat, lon]);
+        if (lat && lon) {
+            points.push([lat, lon]);
+        } else {
+            console.info("No lat/lon in row");
+        }
     });
 
+    this.extendBounds(points);
+
     L.heatLayer(points, {
+        radius: 15,
         minOpacity: 0.4
     }).addTo(this.leafletLayer);
 
