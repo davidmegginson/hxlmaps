@@ -1,5 +1,9 @@
-var mapConfig = {
-    title: "hxlmaps demo",
+
+/**
+ * Default map configuration (for demo purposes, if none is specified).
+ */
+var demoConfig = {
+    title: "Demo hxlmap",
     layers: [
         {
             name: "ACLED conflict locations",
@@ -21,11 +25,20 @@ var mapConfig = {
     ]
 }
 
+
 /**
- * Look up a GET parameter
+ * The HXL map object.
  */
-function getParameterByName(name, url) {
-    if (!url) url = window.location.href;
+var hxlmap = null;
+
+
+/**
+ * Look up a GET parameter from the URI query string
+ * @param {string} name - the parameter name.
+ * @returns - the parameter value, or null if not present.
+ */
+function getParameterByName(name) {
+    var url = window.location.href;
     name = name.replace(/[\[\]]/g, '\\$&');
     var regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)'),
         results = regex.exec(url);
@@ -34,18 +47,23 @@ function getParameterByName(name, url) {
     return decodeURIComponent(results[2].replace(/\+/g, ' '));
 }
 
-var configString = getParameterByName("config");
-var config;
-if (configString) {
-    config = JSON.parse(configString);
-} else {
-    console.log("Using default config");
-    config = mapConfig;
-}
 
-if (config.title) {
-    document.title = config.title;
-}
-var demo_map = new hxlmaps.Map("map", config);
-    
+// Load the map
+window.onload = function () {
+    var config;
+
+    // Do we have a ?config= parameter?
+    var configString = getParameterByName("config");
+    if (configString) {
+        config = JSON.parse(configString);
+    } else {
+        console.log("No ?config= parameter specified. Showing demo map.");
+        config = mapConfig;
+    }
+
+    if (config.title) {
+        document.title = config.title;
+    }
+    var demo_map = new hxlmaps.Map("map", config);
+}    
 
