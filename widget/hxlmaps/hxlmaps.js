@@ -8,6 +8,7 @@ var hxlmaps = {
 };
 
 
+
 ////////////////////////////////////////////////////////////////////////
 // hxlmaps.Map class
 ////////////////////////////////////////////////////////////////////////
@@ -30,6 +31,9 @@ hxlmaps.Map = function(mapId, mapConfig) {
 
     // create the loading spinner for later use
     this.spinner = new Spinner();
+
+    // layer group holding CODs
+    this.codLayerGroup = null;
 
     // the hxlmaps.Layer objects (not Leaflet layers)
     this.layers = [];
@@ -56,7 +60,35 @@ hxlmaps.Map = function(mapId, mapConfig) {
             }
             this.tileLayers[tileConfig.name] = tileLayer;
         });
-        this.tileLayers[hxlmaps.tileInfo[0].name].addTo(this.map);
+        this.osmLayer = this.tileLayers[hxlmaps.tileInfo[0].name];
+        //this.tileLayers[hxlmaps.tileInfo[0].name].addTo(this.map);
+
+        // load the CODs base layers
+        if (mapConfig.codLayers) {
+            this.codLayerGroup = L.layerGroup({
+                'pane': 'tilePane'
+            });
+            mapConfig.codLayers.forEach(codConfig => {
+                var promise = hxlmaps.cods.loadItosLevel(codConfig.country, codConfig.level);
+                promise.then(
+                    json => {
+                        this.codLayerGroup.addLayer(L.geoJSON(json, {
+                            style: () => {
+                                return {
+                                    color: "#888888",
+                                    weight: 1
+                                };
+                            },
+                            pane: 'tilePane'
+                        }));
+                    },
+                    () => {
+                        console.error("Failed to load COD", codConfig);
+                    }
+                );
+                promises.push(promise);
+            });
+        }
 
         // load each HXL-based layer
         if (mapConfig.layers) {
@@ -84,12 +116,24 @@ hxlmaps.Map = function(mapId, mapConfig) {
             // Show the map in bounds
             this.snapToBounds();
 
+            // Set up base layers
+            var baseLayers = {};
+            if (this.osmLayer) {
+                baseLayers['OpenStreetMap'] = this.osmLayer;
+                this.osmLayer.addTo(this.map);
+            }
+            if (this.codLayerGroup) {
+                baseLayers['CODs'] = this.codLayerGroup;
+            }
+            baseLayers['None'] = L.layerGroup();
+            
             // Add a layer selector
             overlays = {}
             this.layers.forEach(layer => {
                 overlays[layer.config.name] = layer.leafletLayer;
             });
-            L.control.layers(this.tileLayers, overlays, {
+
+            L.control.layers(baseLayers, overlays, {
                 sort: true,
                 autoZIndex: true
             }).addTo(this.map);
@@ -142,6 +186,7 @@ hxlmaps.Map.prototype.snapToBounds = function () {
 };
 
 
+
 ////////////////////////////////////////////////////////////////////////
 // hxlmaps.HXLLayer class
 ////////////////////////////////////////////////////////////////////////
@@ -523,6 +568,7 @@ hxlmaps.Layer.prototype.makeAreaStyle = function (feature) {
 };
 
 
+
 ////////////////////////////////////////////////////////////////////////
 // Static variables and functions
 ////////////////////////////////////////////////////////////////////////
