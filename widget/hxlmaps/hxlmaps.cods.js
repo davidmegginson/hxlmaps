@@ -74,7 +74,6 @@ hxlmaps.cods.loadItosCountryInfo = function(countryCode) {
     // if we've already loaded or started loading the country info,
     // return the existing promise
     if (hxlmaps.cods.countryInfoPromiseCache[countryCode]) {
-        console.info("Hit country info cache", countryCode);
         return hxlmaps.cods.countryInfoPromiseCache[countryCode];
     }
 
