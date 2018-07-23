@@ -2,7 +2,11 @@
  * CODS-related functions for HXL maps
  */
 
-hxlmaps.cods = {}
+hxlmaps.cods = {};
+
+hxlmaps.cods.countryInfoPromiseCache = {};
+
+hxlmaps.cods.geoJsonPromiseCache = {};
 
 /**
  * Determine a country for a P-code.
@@ -66,13 +70,23 @@ hxlmaps.cods.fuzzyPcodeLookup = function(pcode, obj) {
  * @returns: the promise for loading the JSON.
  */
 hxlmaps.cods.loadItosCountryInfo = function(countryCode) {
+
+    // if we've already loaded or started loading the country info,
+    // return the existing promise
+    if (hxlmaps.cods.countryInfoPromiseCache[countryCode]) {
+        console.info("Hit country info cache", countryCode);
+        return hxlmaps.cods.countryInfoPromiseCache[countryCode];
+    }
+
+    // need to create a new promise to load it
     var deferred = $.Deferred();
     var urlPattern = "https://gistmaps.itos.uga.edu/arcgis/rest/services/COD_External/{{country}}_pcode/MapServer?f=json";
     var url = urlPattern.replace("{{country}}", countryCode.toUpperCase());
-    var promise = jQuery.getJSON(url);
-    return promise.done(json => {
+    var promise = jQuery.getJSON(url).done(json => {
         deferred.resolve(json.layers);
     });
+    hxlmaps.cods.countryInfoPromiseCache[countryCode] = promise;
+    return promise;
 };
 
 /**
@@ -83,15 +97,22 @@ hxlmaps.cods.loadItosCountryInfo = function(countryCode) {
  */
 hxlmaps.cods.loadItosLevel = function (countryCode, adminLevel) {
 
+    var cacheKey = [countryCode, adminLevel];
+
+    // if we've already loaded or started loading the GeoJSON,
+    // return the existing promise
+    if (hxlmaps.cods.geoJsonPromiseCache[cacheKey]) {
+        return hxlmaps.cods.geoJsonPromiseCache[cacheKey];
+    }
+
+    // need to create a new promise to load it
     var adminInfo = hxlmaps.cods.itosAdminInfo[adminLevel];
     if (!adminInfo) {
         console.error("Unrecognised admin level", adminLevel);
         return;
     }
     
-    var promise = hxlmaps.cods.loadItosCountryInfo(countryCode);
-
-    return promise.then(countryInfo => {
+    var promise = hxlmaps.cods.loadItosCountryInfo(countryCode).then(countryInfo => {
         var levelId;
         for (var i = 0; i < countryInfo.layers.length; i++) {
             layerInfo = countryInfo.layers[i];
@@ -106,6 +127,9 @@ hxlmaps.cods.loadItosLevel = function (countryCode, adminLevel) {
         return jQuery.getJSON(url);
     });
 
+    hxlmaps.cods.geoJsonPromiseCache[cacheKey] = promise;
+
+    return promise;
 };
 
 /**
