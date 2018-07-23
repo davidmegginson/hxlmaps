@@ -3,14 +3,8 @@
  * Default map configuration (for demo purposes, if none is specified).
  */
 var demoConfig = {
-    title: "Demo hxlmap",
+    title: "Demo hxlmap (Mali conflict locations and 3W)",
     layers: [
-        {
-            name: "ACLED conflict locations",
-            url: "https://data.humdata.org/dataset/acled-data-for-nigeria",
-            unit: "incidents",
-            cluster: true
-        },
         {
             name: "ACLED conflict heat map",
             url: "https://data.humdata.org/dataset/acled-data-for-mali",
@@ -58,7 +52,7 @@ window.onload = function () {
         config = JSON.parse(configString);
     } else {
         console.log("No ?config= parameter specified. Showing demo map.");
-        config = mapConfig;
+        config = demoConfig;
     }
 
     if (config.title) {
