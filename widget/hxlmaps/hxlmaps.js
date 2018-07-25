@@ -96,7 +96,7 @@ hxlmaps.Map = function(mapId, mapConfig) {
                 var layer = new hxlmaps.Layer(this.map, layerConfig);
                 var promise = layer.load();
                 promises.push(promise);
-                promise.done(() => {
+                promise.then(() => {
                     if (layer.bounds) {
                         this.extendBounds(layer.bounds);
                     }
@@ -209,7 +209,7 @@ hxlmaps.Layer.prototype.load = function () {
 
     this.leafletLayer = L.layerGroup();
 
-    return this.loadHXL().done(() => {
+    return this.loadHXL().then(() => {
         this.setType();
         if (this.config.type == "points") {
             return this.loadPoints();
@@ -411,12 +411,15 @@ hxlmaps.Layer.prototype.loadGeoJSON = function () {
     var promises = []
     countries.forEach((countryCode) => {
         var promise = hxlmaps.cods.loadItosLevel(countryCode, this.config.adminLevel);
-        promises.push(promise.done((geojson) => {
+        promises.push(promise.then((geojson) => {
             this.countryMap[countryCode]["geojson"] = geojson;
         }));
-        promise.fail(() => {
-            console.error("Cannot open GeoJSON", countryCode, this.config.adminLevel);
-        });
+        promise.then(
+            null,
+            () => {
+                console.error("Cannot open GeoJSON", countryCode, this.config.adminLevel);
+            }
+        );
     });
     return Promise.all(promises); // return a promise that won't complete until all others are done
 };

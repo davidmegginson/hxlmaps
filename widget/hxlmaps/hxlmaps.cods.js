@@ -78,12 +78,9 @@ hxlmaps.cods.loadItosCountryInfo = function(countryCode) {
     }
 
     // need to create a new promise to load it
-    var deferred = $.Deferred();
     var urlPattern = "https://gistmaps.itos.uga.edu/arcgis/rest/services/COD_External/{{country}}_pcode/MapServer?f=json";
     var url = urlPattern.replace("{{country}}", countryCode.toUpperCase());
-    var promise = jQuery.getJSON(url).done(json => {
-        deferred.resolve(json.layers);
-    });
+    var promise = hxlmaps.cods.getJSON(url);
     hxlmaps.cods.countryInfoPromiseCache[countryCode] = promise;
     return promise;
 };
@@ -123,13 +120,44 @@ hxlmaps.cods.loadItosLevel = function (countryCode, adminLevel) {
         var urlPattern = "https://gistmaps.itos.uga.edu/arcgis/rest/services/COD_External/{{country}}_pcode/MapServer/{{level}}/query?where=1%3D1&outFields=*&f=geojson";
         var url = urlPattern.replace("{{country}}", countryCode.toUpperCase());
         url = url.replace("{{level}}", levelId);
-        return jQuery.getJSON(url);
+        return hxlmaps.cods.getJSON(url);
     });
 
     hxlmaps.cods.geoJsonPromiseCache[cacheKey] = promise;
 
     return promise;
 };
+
+
+/**
+ * Load JSON.
+ * @param url address of the JSON to load
+ * @returns a loading promise
+ */
+hxlmaps.cods.getJSON = function (url) {
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("GET", url);
+        xhr.onload = () => {
+            try {
+                var json = JSON.parse(xhr.responseText);
+                resolve(json);
+            } catch (e) {
+                reject(e);
+            }
+        };
+        xhr.onerror = () => {
+            reject(xhr.statusText);
+        };
+        xhr.send();
+    });
+};
+
+
+
+////////////////////////////////////////////////////////////////////////
+// Static config data
+////////////////////////////////////////////////////////////////////////
 
 /**
  * Map from the admin levels used by HXL to those used by iTOS
