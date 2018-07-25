@@ -75,7 +75,6 @@ hxlmaps.cods.loadItosCountryInfo = function(countryCode) {
     // if we've already loaded or started loading the country info,
     // return the existing promise
     if (hxlmaps.cods.countryInfoPromiseCache[countryCode]) {
-        console.log("Hit country info catch", countryCode);
         return hxlmaps.cods.countryInfoPromiseCache[countryCode];
     }
 
@@ -103,18 +102,22 @@ hxlmaps.cods.loadItosLevel = function (countryCode, adminLevel) {
     // if we've already loaded or started loading the GeoJSON,
     // return the existing promise
     if (hxlmaps.cods.geoJsonPromiseCache[cacheKey]) {
-        console.log("Hit GeoJSON cache", cacheKey);
         return hxlmaps.cods.geoJsonPromiseCache[cacheKey];
     }
 
     // need to create a new promise to load it
     var adminInfo = hxlmaps.cods.itosAdminInfo[adminLevel];
     if (!adminInfo) {
-        console.error("Unrecognised admin level", adminLevel);
-        return;
+        return Promise.reject("Unrecognised admin level: " + adminLevel);
     }
     
     var promise = hxlmaps.cods.loadItosCountryInfo(countryCode).then(countryInfo => {
+
+        // iTOS still returns 200 on error, so check the JSON before proceeding
+        if (countryInfo.error) {
+            return Promise.reject(countryInfo.error.message);
+        }
+        
         var levelId;
         for (var i = 0; i < countryInfo.layers.length; i++) {
             layerInfo = countryInfo.layers[i];

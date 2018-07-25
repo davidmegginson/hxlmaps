@@ -61,7 +61,6 @@ hxlmaps.Map = function(mapId, mapConfig) {
             this.tileLayers[tileConfig.name] = tileLayer;
         });
         this.osmLayer = this.tileLayers[hxlmaps.tileInfo[0].name];
-        //this.tileLayers[hxlmaps.tileInfo[0].name].addTo(this.map);
 
         // load the CODs base layers
         if (mapConfig.codLayers) {
@@ -69,8 +68,7 @@ hxlmaps.Map = function(mapId, mapConfig) {
                 'pane': 'tilePane'
             });
             mapConfig.codLayers.forEach(codConfig => {
-                var promise = hxlmaps.cods.loadItosLevel(codConfig.country, codConfig.level);
-                promise.then(
+                var promise = hxlmaps.cods.loadItosLevel(codConfig.country, codConfig.level).then(
                     json => {
                         this.codLayerGroup.addLayer(L.geoJSON(json, {
                             style: () => {
@@ -82,8 +80,11 @@ hxlmaps.Map = function(mapId, mapConfig) {
                             pane: 'tilePane'
                         }));
                     },
-                    () => {
-                        console.error("Failed to load COD", codConfig);
+                    error => {
+                        console.error("Failed to load COD", error, codConfig);
+                        // still need to return a resolved promise, so that
+                        // other layers can load
+                        return Promise.resolve();
                     }
                 );
                 promises.push(promise);
@@ -94,20 +95,27 @@ hxlmaps.Map = function(mapId, mapConfig) {
         if (mapConfig.layers) {
             mapConfig.layers.forEach(layerConfig => {
                 var layer = new hxlmaps.Layer(this.map, layerConfig);
-                var promise = layer.load();
-                promises.push(promise);
-                promise.then(() => {
-                    if (layer.bounds) {
-                        this.extendBounds(layer.bounds);
+                var promise = layer.load().then(
+                    () => {
+                        if (layer.bounds) {
+                            this.extendBounds(layer.bounds);
+                        }
+                        this.map.addLayer(layer.leafletLayer);
+                        this.layers.push(layer);
+                    },
+                    error => {
+                        console.error(error, layer);
+                        // still need to return a resolved promise, so that
+                        // other layers can load
+                        return Promise.resolve();
                     }
-                    this.map.addLayer(layer.leafletLayer);
-                });
-                this.layers.push(layer);
+                );
+                promises.push(promise);
             });
         }
 
         // this runs only after all layers are loaded
-        Promise.all(promises).finally(() => {
+        Promise.all(promises).then(() => {
             this.spin(false);
             if (this.layers.length == 0) {
                 console.error("No layers defined");
@@ -221,7 +229,6 @@ hxlmaps.Layer.prototype.load = function () {
             } else if (this.config.type == "areas") {
                 return this.loadAreas();
             } else {
-                console.error("Bad layer type", this.config);
                 return Promise.reject("Bad layer type " + this.config.type);
             }
         });
@@ -387,8 +394,9 @@ hxlmaps.Layer.prototype.loadGeoJSON = function () {
         promises.push(promise.then((geojson) => {
             this.countryMap[countryCode]["geojson"] = geojson;
         }));
-        promise.catch(() => {
-            console.error("Cannot open GeoJSON", countryCode, this.config.adminLevel);
+        promise.catch((error) => {
+            // mustn't prevent the load completely
+            console.error(error, countryCode, this.config.adminLevel);
             return Promise.resolve();
         });
     });
@@ -587,8 +595,7 @@ hxlmaps.loadHXL = function(url) {
                 resolve(source);
             },
             (xhr) => {
-                console.error("Unable to read HXL dataset", url, xhr);
-                reject(xhr.statusText)
+                reject("Unable to read HXL dataset: " + xhr.statusText);
             }
         );
     });
