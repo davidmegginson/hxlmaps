@@ -4,6 +4,12 @@
  */
 var demoConfig = {
     title: "Demo hxlmap (Mali conflict locations and 3W)",
+    codLayers: [
+        {
+            country: "MLI",
+            level: "#adm1"
+        }
+    ],
     layers: [
         {
             name: "ACLED conflict heat map",
