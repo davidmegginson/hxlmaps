@@ -107,7 +107,7 @@ hxlmaps.Map = function(mapId, mapConfig) {
         }
 
         // this runs only after all layers are loaded
-        $.when.apply($, promises).done(() => {
+        Promise.all(promises).then(() => {
             this.spin(false);
             if (this.layers.length == 0) {
                 console.error("No layers defined");
@@ -266,7 +266,7 @@ hxlmaps.Layer.prototype.loadPoints = function () {
 
     });
 
-    return $.when($); // empty promise (resolves instantly)
+    return Promise.resolve();
 };
 
 
@@ -293,7 +293,7 @@ hxlmaps.Layer.prototype.loadHeat = function () {
         minOpacity: 0.4
     }).addTo(this.leafletLayer);
 
-    return $.when($); // empty promise (resolves instantly)
+    return Promise.resolve(); // empty promise (resolves instantly)
 };
 
 
@@ -353,7 +353,7 @@ hxlmaps.Layer.prototype.loadAreas = function () {
 
     var promise = this.loadGeoJSON();
 
-    promise.done(() => {
+    promise.then(() => {
         for (var key in this.countryMap) {
             var entry = this.countryMap[key];
             if (entry.geojson) {
@@ -418,7 +418,7 @@ hxlmaps.Layer.prototype.loadGeoJSON = function () {
             console.error("Cannot open GeoJSON", countryCode, this.config.adminLevel);
         });
     });
-    return $.when.apply($, promises); // return a promise that won't complete until all others are done
+    return Promise.all(promises); // return a promise that won't complete until all others are done
 };
 
 
