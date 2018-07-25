@@ -209,19 +209,25 @@ hxlmaps.Layer.prototype.load = function () {
 
     this.leafletLayer = L.layerGroup();
 
-    return this.loadHXL().then(() => {
-        this.setType();
-        if (this.config.type == "points") {
-            return this.loadPoints();
-        } else if (this.config.type == "heat") {
-            return this.loadHeat();
-        } else if (this.config.type == "areas") {
-            return this.loadAreas();
-        } else {
-            console.error("Bad layer type", this.config);
-            return Promise.reject("Bad layer type " + this.config.type);
-        }
-    });
+    if (this.config.url) {
+        return hxlmaps.loadHXL(this.config.url).then((source) => {
+            this.source = source;
+            this.setType();
+            // return the appropriate Leaflet loading promise
+            if (this.config.type == "points") {
+                return this.loadPoints();
+            } else if (this.config.type == "heat") {
+                return this.loadHeat();
+            } else if (this.config.type == "areas") {
+                return this.loadAreas();
+            } else {
+                console.error("Bad layer type", this.config);
+                return Promise.reject("Bad layer type " + this.config.type);
+            }
+        });
+    } else {
+        return Promise.reject("No HXL url for data layer: " + this.config.name);
+    }
 };
 
 
@@ -272,6 +278,7 @@ hxlmaps.Layer.prototype.loadPoints = function () {
 
 /**
  * Load as a heatmap
+ * @returns a promise (already resolved)
  */
 hxlmaps.Layer.prototype.loadHeat = function () {
     var points = [];
@@ -369,34 +376,6 @@ hxlmaps.Layer.prototype.loadAreas = function () {
         hxlmaps.makeLegendControl(this.config, this.minValue, this.maxValue).addTo(this.map);
         deferred.resolve();
     });
-
-    return deferred.promise();
-};
-
-
-/**
- * Load the HXL data for the layer.
- * @returns a promise that resolves when the HXL data is loaded.
- */
-hxlmaps.Layer.prototype.loadHXL = function() {
-    var deferred = $.Deferred();
-    
-    if (this.config.url) {
-        hxl.proxy(
-            this.config.url,
-            (source) => {
-                this.source = source;
-                deferred.resolve();
-            },
-            (xhr) => {
-                console.error("Unable to read HXL dataset", url, xhr);
-                deferred.reject()
-            }
-        );
-    } else {
-        console.error("No dataset specified for layer", this.config);
-        deferred.reject();
-    }
 
     return deferred.promise();
 };
@@ -575,6 +554,27 @@ hxlmaps.Layer.prototype.makeAreaStyle = function (feature) {
 hxlmaps.esc = function(s) {
     return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
 }
+
+
+/**
+ * Load the HXL data for the layer.
+ * @returns a promise that resolves when the HXL data is loaded.
+ */
+hxlmaps.loadHXL = function(url) {
+    // wrap in an ES6 promise
+    return new Promise((resolve, reject) => {
+        hxl.proxy(
+            url,
+            (source) => {
+                resolve(source);
+            },
+            (xhr) => {
+                console.error("Unable to read HXL dataset", url, xhr);
+                reject(xhr.statusText)
+            }
+        );
+    });
+};
 
 
 /**
