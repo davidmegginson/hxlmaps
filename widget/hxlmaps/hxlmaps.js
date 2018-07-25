@@ -547,7 +547,21 @@ hxlmaps.Layer.prototype.makeAreaStyle = function (feature) {
  */
 hxlmaps.esc = function(s) {
     return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
-}
+};
+
+
+/**
+ * Quick create an HTML element with attributes
+ */
+hxlmaps.el = function(name, atts) {
+    var node = document.createElement(name);
+    if (atts) {
+        for (var name in atts) {
+            node.setAttribute(name, atts[name]);
+        }
+    }
+    return node;
+};
 
 
 /**
@@ -622,7 +636,7 @@ hxlmaps.numfmt = function (n) {
 hxlmaps.makeLegendControl = function(layerConfig, min, max) {
     var control = L.control({position: 'bottomright'});
     control.onAdd = function(map) {
-        var node = $('<div class="info legend map-legend">');
+        var node = hxlmaps.el('div', {class: 'info legend map-legend'});
 
         // set the transparency to match the map
         var alpha = layerConfig.alpha;
@@ -632,29 +646,32 @@ hxlmaps.makeLegendControl = function(layerConfig, min, max) {
 
         // show what's being counted
         if (layerConfig.unit) {
-            var unit = $('<div class="unit">')
-            unit.text("Number of " + layerConfig.unit);
-            node.append(unit);
+            var unit = hxlmaps.el('div', {class: 'unit'});
+            unit.textContent = "Number of " + layerConfig.unit;
+            node.appendChild(unit);
         }
 
         // generate a gradient from 0-100% in 5% steps
         for (var percentage = 0; percentage <= 1.0; percentage += 0.05) {
             var color = hxlmaps.genColor(percentage, layerConfig.colorMap, alpha);
-            var box = $('<span class="color" style="background:' + color + '">');
-            box.html("&nbsp;");
-            node.append(box);
+            var box = hxlmaps.el('span', {
+                class: 'color',
+                style: 'background:' + color
+            });
+            box.innerHTML = '&nbsp;';
+            node.appendChild(box);
         }
 
         // add the minimum and maximum absolute values
-        node.append($("<br>")); // FIXME: blech
-        var minValue = $('<div class="min">');
-        minValue.text(hxlmaps.numfmt(min));
-        node.append(minValue);
-        var maxValue = $('<div class="max">');
-        maxValue.text(hxlmaps.numfmt(max));
-        node.append(maxValue);
+        node.appendChild(hxlmaps.el('br')); // FIXME: blech
+        var minValue = hxlmaps.el('div', {class: 'min'});
+        minValue.textContent = hxlmaps.numfmt(min);
+        node.appendChild(minValue);
+        var maxValue = hxlmaps.el('div', {class: 'max'});
+        maxValue.textContent = hxlmaps.numfmt(max);
+        node.appendChild(maxValue);
         
-        return node.get(0);
+        return node;
     };
     return control;
 };
