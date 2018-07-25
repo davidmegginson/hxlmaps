@@ -107,7 +107,7 @@ hxlmaps.Map = function(mapId, mapConfig) {
         }
 
         // this runs only after all layers are loaded
-        Promise.all(promises).then(() => {
+        Promise.all(promises).finally(() => {
             this.spin(false);
             if (this.layers.length == 0) {
                 console.error("No layers defined");
@@ -387,12 +387,10 @@ hxlmaps.Layer.prototype.loadGeoJSON = function () {
         promises.push(promise.then((geojson) => {
             this.countryMap[countryCode]["geojson"] = geojson;
         }));
-        promise.then(
-            null,
-            () => {
-                console.error("Cannot open GeoJSON", countryCode, this.config.adminLevel);
-            }
-        );
+        promise.catch(() => {
+            console.error("Cannot open GeoJSON", countryCode, this.config.adminLevel);
+            return Promise.resolve();
+        });
     });
     return Promise.all(promises); // return a promise that won't complete until all others are done
 };

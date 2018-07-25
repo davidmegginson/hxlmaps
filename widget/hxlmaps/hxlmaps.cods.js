@@ -24,6 +24,7 @@ hxlmaps.cods.getPcodeCountry = function(pcode) {
     }
 };
 
+
 /**
  * Do a fuzzy P-code lookup, trying various substitutions
  * Force the P-code to upper case, and try both ISO2 and ISO3 variants.
@@ -74,6 +75,7 @@ hxlmaps.cods.loadItosCountryInfo = function(countryCode) {
     // if we've already loaded or started loading the country info,
     // return the existing promise
     if (hxlmaps.cods.countryInfoPromiseCache[countryCode]) {
+        console.log("Hit country info catch", countryCode);
         return hxlmaps.cods.countryInfoPromiseCache[countryCode];
     }
 
@@ -81,9 +83,12 @@ hxlmaps.cods.loadItosCountryInfo = function(countryCode) {
     var urlPattern = "https://gistmaps.itos.uga.edu/arcgis/rest/services/COD_External/{{country}}_pcode/MapServer?f=json";
     var url = urlPattern.replace("{{country}}", countryCode.toUpperCase());
     var promise = hxlmaps.cods.getJSON(url);
+
+    // add to cache so that we don't load the country info twice
     hxlmaps.cods.countryInfoPromiseCache[countryCode] = promise;
     return promise;
 };
+
 
 /**
  * Load GeoJSON from iTOS
@@ -98,6 +103,7 @@ hxlmaps.cods.loadItosLevel = function (countryCode, adminLevel) {
     // if we've already loaded or started loading the GeoJSON,
     // return the existing promise
     if (hxlmaps.cods.geoJsonPromiseCache[cacheKey]) {
+        console.log("Hit GeoJSON cache", cacheKey);
         return hxlmaps.cods.geoJsonPromiseCache[cacheKey];
     }
 
@@ -123,8 +129,8 @@ hxlmaps.cods.loadItosLevel = function (countryCode, adminLevel) {
         return hxlmaps.cods.getJSON(url);
     });
 
+    // add to cache so that we don't download the same geodata twice
     hxlmaps.cods.geoJsonPromiseCache[cacheKey] = promise;
-
     return promise;
 };
 
