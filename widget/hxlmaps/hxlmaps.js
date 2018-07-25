@@ -552,12 +552,24 @@ hxlmaps.esc = function(s) {
 
 /**
  * Quick create an HTML element with attributes
+ * @param name the attribute name
+ * @param atts (optional) an object of attribute names and values
+ * @param content (optional) content to load into the element
+ * @param isHTML (optional) if true, treat content as HTML
+ * @returns a DOM element node
  */
-hxlmaps.el = function(name, atts) {
+hxlmaps.el = function(name, atts, content, isHTML) {
     var node = document.createElement(name);
     if (atts) {
         for (var name in atts) {
             node.setAttribute(name, atts[name]);
+        }
+    }
+    if (content) {
+        if (isHTML) {
+            node.innerHTML = content;
+        } else {
+            node.textContent = content;
         }
     }
     return node;
@@ -646,30 +658,27 @@ hxlmaps.makeLegendControl = function(layerConfig, min, max) {
 
         // show what's being counted
         if (layerConfig.unit) {
-            var unit = hxlmaps.el('div', {class: 'unit'});
-            unit.textContent = "Number of " + layerConfig.unit;
-            node.appendChild(unit);
+            node.appendChild(hxlmaps.el('div', {class: 'unit'}, "Number of " + layerConfig.unit));
         }
 
         // generate a gradient from 0-100% in 5% steps
         for (var percentage = 0; percentage <= 1.0; percentage += 0.05) {
             var color = hxlmaps.genColor(percentage, layerConfig.colorMap, alpha);
-            var box = hxlmaps.el('span', {
-                class: 'color',
-                style: 'background:' + color
-            });
-            box.innerHTML = '&nbsp;';
-            node.appendChild(box);
+            node.appendChild(hxlmaps.el(
+                'span',
+                {
+                    class: 'color',
+                    style: 'background:' + color
+                },
+                "&nbsp",
+                true
+            ));
         }
 
         // add the minimum and maximum absolute values
         node.appendChild(hxlmaps.el('br')); // FIXME: blech
-        var minValue = hxlmaps.el('div', {class: 'min'});
-        minValue.textContent = hxlmaps.numfmt(min);
-        node.appendChild(minValue);
-        var maxValue = hxlmaps.el('div', {class: 'max'});
-        maxValue.textContent = hxlmaps.numfmt(max);
-        node.appendChild(maxValue);
+        node.appendChild(hxlmaps.el('div', {class: 'min'}, hxlmaps.numfmt(min)));
+        node.appendChild(hxlmaps.el('div', {class: 'max'}, hxlmaps.numfmt(max)));
         
         return node;
     };
