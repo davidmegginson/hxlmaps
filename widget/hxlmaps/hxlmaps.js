@@ -141,6 +141,8 @@ hxlmaps.Map = function(mapId, mapConfig) {
                 overlays[layer.config.name] = layer.leafletLayer;
             });
 
+            hxlmaps.makeLogControl().addTo(this.map);
+
             L.control.layers(baseLayers, overlays, {
                 sort: true,
                 autoZIndex: true
@@ -642,6 +644,29 @@ hxlmaps.numfmt = function (n) {
     return new Intl.NumberFormat().format(n);
 };
 
+
+hxlmaps.LogControl = L.Control.extend({
+    options: {
+        position: 'bottomleft'
+    },
+    onAdd: function (map) {
+        var node = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-custom');
+        node.style.backgroundColor = 'white';
+        node.style.width = '30px';
+        node.style.height = '30px';
+        node.onclick = () => {
+            alert("Logs");
+            console.log('buttonClicked');
+        };
+        node.textContent = "⚠️";
+        return node;
+    }
+});
+
+
+hxlmaps.makeLogControl = function(options) {
+    return new hxlmaps.LogControl(options);
+};
 
 /**
  * Make a leaflet control for the map legend.
