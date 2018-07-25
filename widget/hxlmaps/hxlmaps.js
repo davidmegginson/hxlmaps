@@ -309,8 +309,6 @@ hxlmaps.Layer.prototype.loadHeat = function () {
  * @returns a promise that resolves when the areas are loaded into the map
  */
 hxlmaps.Layer.prototype.loadAreas = function () {
-    var deferred = $.Deferred();
-    
     if (!this.config.colorMap) {
         this.config.colorMap = [
             { percentage: 0.0, color: { r: 0x80, g: 0xd0, b: 0xc7 } },
@@ -358,9 +356,7 @@ hxlmaps.Layer.prototype.loadAreas = function () {
 
     this.setCountries();
 
-    var promise = this.loadGeoJSON();
-
-    promise.then(() => {
+    return this.loadGeoJSON().then(() => {
         for (var key in this.countryMap) {
             var entry = this.countryMap[key];
             if (entry.geojson) {
@@ -374,10 +370,8 @@ hxlmaps.Layer.prototype.loadAreas = function () {
         }
         // add a colour legend for the layer
         hxlmaps.makeLegendControl(this.config, this.minValue, this.maxValue).addTo(this.map);
-        deferred.resolve();
     });
 
-    return deferred.promise();
 };
 
 
