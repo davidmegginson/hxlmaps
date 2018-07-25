@@ -206,29 +206,22 @@ hxlmaps.Layer = function(map, layerConfig) {
  * @returns a promise that resolves when the layer is loaded into the map
  */
 hxlmaps.Layer.prototype.load = function () {
-    var deferred = $.Deferred();
 
     this.leafletLayer = L.layerGroup();
 
-    this.loadHXL().done(() => {
-        var promise;
+    return this.loadHXL().done(() => {
         this.setType();
         if (this.config.type == "points") {
-            promise = this.loadPoints();
+            return this.loadPoints();
         } else if (this.config.type == "heat") {
-            promise = this.loadHeat();
+            return this.loadHeat();
         } else if (this.config.type == "areas") {
-            promise = this.loadAreas();
+            return this.loadAreas();
         } else {
-            console.error("Bad layer type", this.config.type);
-            promise = $.when($);
+            console.error("Bad layer type", this.config);
+            return Promise.reject("Bad layer type " + this.config.type);
         }
-        promise.done(() => {
-            deferred.resolve();
-        });
     });
-
-    return deferred.promise();
 };
 
 
