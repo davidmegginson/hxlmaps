@@ -141,7 +141,7 @@ hxlmaps.Map = function(mapId, mapConfig) {
                 overlays[layer.config.name] = layer.leafletLayer;
             });
 
-            hxlmaps.makeLogControl().addTo(this.map);
+            hxlmaps.controls.logControl().addTo(this.map);
 
             L.control.layers(baseLayers, overlays, {
                 sort: true,
@@ -378,7 +378,11 @@ hxlmaps.Layer.prototype.loadAreas = function () {
             }
         }
         // add a colour legend for the layer
-        hxlmaps.makeLegendControl(this.config, this.minValue, this.maxValue).addTo(this.map);
+        hxlmaps.controls.legendControl({
+            layerConfig: this.config,
+            min: this.minValue,
+            max: this.maxValue
+        }).addTo(this.map);
     });
 
 };
@@ -645,7 +649,20 @@ hxlmaps.numfmt = function (n) {
 };
 
 
-hxlmaps.LogControl = L.Control.extend({
+
+////////////////////////////////////////////////////////////////////////
+// Custom controls
+////////////////////////////////////////////////////////////////////////
+
+/**
+ * Namespace for custom controls
+ */
+hxlmaps.controls = {};
+
+/**
+ * Control to show log information
+ */
+hxlmaps.controls.LogControl = L.Control.extend({
     options: {
         position: 'bottomleft'
     },
@@ -664,36 +681,40 @@ hxlmaps.LogControl = L.Control.extend({
 });
 
 
-hxlmaps.makeLogControl = function(options) {
-    return new hxlmaps.LogControl(options);
+/**
+ * Constructor function for LogControl
+ */
+hxlmaps.controls.logControl = function(options) {
+    return new hxlmaps.controls.LogControl(options);
 };
 
 /**
- * Make a leaflet control for the map legend.
- * @param layerConfig: the layer configuration, including color map.
- * @param min: the minimum value in the legend.
- * @param max: the maximum value in the legend.
- * @returns: a Leaflet control to add to the map.
+ * Control to show a map legend
  */
-hxlmaps.makeLegendControl = function(layerConfig, min, max) {
-    var control = L.control({position: 'bottomright'});
-    control.onAdd = function(map) {
+hxlmaps.controls.LegendControl = L.Control.extend({
+    options: {
+        position: 'bottomright',
+        layerConfig: {},
+        min: 0,
+        max: 1
+    },
+    onAdd: function (map) {
         var node = hxlmaps.el('div', {class: 'info legend map-legend'});
 
         // set the transparency to match the map
-        var alpha = layerConfig.alpha;
+        var alpha = this.options.layerConfig.alpha;
         if (!alpha) {
             alpha = 0.5; // FIXME take from config
         }
 
         // show what's being counted
-        if (layerConfig.unit) {
-            node.appendChild(hxlmaps.el('div', {class: 'unit'}, "Number of " + layerConfig.unit));
+        if (this.options.layerConfig.unit) {
+            node.appendChild(hxlmaps.el('div', {class: 'unit'}, "Number of " + this.options.layerConfig.unit));
         }
 
         // generate a gradient from 0-100% in 5% steps
         for (var percentage = 0; percentage <= 1.0; percentage += 0.05) {
-            var color = hxlmaps.genColor(percentage, layerConfig.colorMap, alpha);
+            var color = hxlmaps.genColor(percentage, this.options.layerConfig.colorMap, alpha);
             node.appendChild(hxlmaps.el(
                 'span',
                 {
@@ -707,13 +728,25 @@ hxlmaps.makeLegendControl = function(layerConfig, min, max) {
 
         // add the minimum and maximum absolute values
         node.appendChild(hxlmaps.el('br')); // FIXME: blech
-        node.appendChild(hxlmaps.el('div', {class: 'min'}, hxlmaps.numfmt(min)));
-        node.appendChild(hxlmaps.el('div', {class: 'max'}, hxlmaps.numfmt(max)));
+        node.appendChild(hxlmaps.el('div', {class: 'min'}, hxlmaps.numfmt(this.options.min)));
+        node.appendChild(hxlmaps.el('div', {class: 'max'}, hxlmaps.numfmt(this.options.max)));
         
         return node;
-    };
-    return control;
+    }
+});
+
+/**
+ * Constructor function for LegendControl
+ */
+hxlmaps.controls.legendControl = function (options) {
+    return new hxlmaps.controls.LegendControl(options);
 };
+
+
+
+////////////////////////////////////////////////////////////////////////
+// Static data
+////////////////////////////////////////////////////////////////////////
 
 /**
  * Tile data
