@@ -126,12 +126,15 @@ hxlmaps.Map = function(mapId, mapConfig) {
 
             // Set up base layers
             var baseLayers = {};
-            if (this.osmLayer) {
-                baseLayers['OpenStreetMap'] = this.osmLayer;
-                this.osmLayer.addTo(this.map);
-            }
             if (this.codLayerGroup) {
                 baseLayers['CODs'] = this.codLayerGroup;
+                this.codLayerGroup.addTo(this.map);
+            }
+            if (this.osmLayer) {
+                baseLayers['OpenStreetMap'] = this.osmLayer;
+                if (!this.codLayerGroup) {
+                    this.osmLayer.addTo(this.map);
+                }
             }
             baseLayers['None'] = L.layerGroup();
             
@@ -318,6 +321,20 @@ hxlmaps.Layer.prototype.loadHeat = function () {
  * @returns a promise that resolves when the areas are loaded into the map
  */
 hxlmaps.Layer.prototype.loadAreas = function () {
+
+    function findColumn(patterns, source) {
+        for (var i = 0; i < patterns.length; i++) {
+            var pattern = hxl.classes.TagPattern.parse(patterns[i]);
+            for (var j = 0; j < source.columns.length; j++) {
+                var column = source.columns[j];
+                if (pattern.match(column)) {
+                    return column;
+                }
+            }
+        }
+        return null;
+    }
+    
     if (!this.config.colorMap) {
         this.config.colorMap = [
             { percentage: 0.0, color: { r: 0x80, g: 0xd0, b: 0xc7 } },
@@ -326,18 +343,40 @@ hxlmaps.Layer.prototype.loadAreas = function () {
     }
     this.config.colorMap = hxlmaps.parseColorMap(this.config.colorMap);
 
-    if (!this.config.aggregateType) {
-        var patterns = ["#reached", "#targeted", "#inneed", "#affected", "#population", "#value", "#indicator+num"];
-        this.config.aggregateType = "count";
-        for (var i = 0; i < patterns.length; i++) {
-            if (hxl.matchList(patterns[i], this.source.columns)) {
-                this.config.aggregateType = "sum";
-                this.config.aggregateColumn = patterns[i];
-                break;
+    if (this.config.hashtag) {
+        var column = findColumn(
+            [this.config.hashtag],
+            this.source
+        );
+    } else {
+        var column = findColumn(
+            ["#reached", "#targeted", "#inneed", "#affected", "#population", "#value", "#indicator+num"],
+            this.source
+        );
+    }
+
+    if (column) {
+        this.config.aggregateType = "sum";
+        this.config.aggregateColumn = column.displayTag + "!";
+        if (!this.config.legend) {
+            if (column.header) {
+                this.config.legend = column.header;
+            } else {
+                this.config.legend = column.displayTag;
+            }
+        }
+    } else {
+        this.config.aggregateType = count;
+        if (!this.config.legend) {
+            if (this.config.unit) {
+                this.config.legend = "Number of " + this.config.unit;
+            } else {
+                this.config.legend = "Number of data rows";
             }
         }
     }
 
+    
     this.adminInfo = hxlmaps.cods.itosAdminInfo[this.config.adminLevel];
     this.source = this.source.count(
         [this.config.adminLevel + "+name", this.config.adminLevel + "+code"],
@@ -498,7 +537,7 @@ hxlmaps.Layer.prototype.addAreaUI = function (feature, layer) {
             }
             var unit = this.config.unit;
             if (!unit) {
-                unit = "entries";
+                unit = "";
             }
             var text = name + ': ' + hxlmaps.numfmt(count) + ' ' + unit;
         } else {
@@ -743,9 +782,7 @@ hxlmaps.controls.LegendControl = L.Control.extend({
         }
 
         // show what's being counted
-        if (this.options.layerConfig.unit) {
-            node.appendChild(hxlmaps.el('div', {class: 'unit'}, "Number of " + this.options.layerConfig.unit));
-        }
+        node.appendChild(hxlmaps.el('div', {class: 'unit'}, this.options.layerConfig.legend));
 
         // generate a gradient from 0-100% in 5% steps
         for (var percentage = 0; percentage <= 1.0; percentage += 0.05) {
