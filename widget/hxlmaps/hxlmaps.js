@@ -418,11 +418,15 @@ hxlmaps.Layer.prototype.loadAreas = function () {
             }
         }
         // add a colour legend for the layer
-        hxlmaps.controls.legendControl({
+        this.legend = hxlmaps.controls.legendControl({
             layerConfig: this.config,
             min: this.minValue,
             max: this.maxValue
-        }).addTo(this.map);
+        });
+
+        // show and hide the legend with the layer
+        this.leafletLayer.on('add', ev => this.legend.addTo(this.map));
+        this.leafletLayer.on('remove', ev => this.legend.remove());
     });
 
 };
