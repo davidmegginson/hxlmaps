@@ -324,6 +324,7 @@ hxlmaps.Layer.prototype.loadAreas = function () {
             { percentage: 1.0, color: { r: 0x13, g: 0x54, b: 0x7a } }
         ];
     }
+    this.config.colorMap = hxlmaps.parseColorMap(this.config.colorMap);
 
     if (!this.config.aggregateType) {
         var patterns = ["#reached", "#targeted", "#inneed", "#affected", "#population", "#value", "#indicator+num"];
@@ -585,6 +586,40 @@ hxlmaps.el = function(name, atts, content, isHTML) {
         }
     }
     return node;
+};
+
+
+/**
+ * Parse a color map into a more verbose format.
+ * Will optionally convert each entry from the succinct version to the verbose version.
+ * Also sorts the map for good measure.
+ * @param {object} map - the colour map to process
+ * @returns - a verbose color map for internal use
+ */
+hxlmaps.parseColorMap = function(map) {
+    for (var i = 0; i < map.length; i++) {
+        var entry = map[i];
+        if (Array.isArray(entry)) {
+            if (entry.length != 2) {
+                console.error("Malformed colour map entry", entry);
+                break;
+            }
+            result = entry[1].trim().toUpperCase().match(/^#([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})$/);
+            if (result) {
+                map[i] = {
+                    percentage: entry[0],
+                    color: {
+                        r: parseInt("0x" + result[1]),
+                        g: parseInt("0x" + result[2]),
+                        b: parseInt("0x" + result[3]),
+                    }
+                };
+            } else {
+                console.error("Bad colour specification", entry[1]);
+            }
+        }
+    }
+    return map.sort((a, b) => a.percentage - b.percentage);
 };
 
 
