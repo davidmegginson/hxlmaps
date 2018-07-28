@@ -249,6 +249,7 @@ hxlmaps.Layer.prototype.load = function () {
  */
 hxlmaps.Layer.prototype.loadPoints = function () {
     var layerGroup;
+    var points = [];
 
     if (this.config.style == 'heat') {
         return this.loadHeat();
@@ -262,6 +263,12 @@ hxlmaps.Layer.prototype.loadPoints = function () {
     this.source.forEach(row => {
         var lat = row.get("#geo+lat");
         var lon = row.get("#geo+lon");
+        if (!lat || !lon) {
+            return;
+        }
+
+        points.push([lat, lon]);
+        
         var marker = L.marker([lat, lon]);
 
         marker.addTo(layerGroup);
@@ -285,6 +292,8 @@ hxlmaps.Layer.prototype.loadPoints = function () {
         marker.bindPopup(label);
 
     });
+
+    this.extendBounds(points);
 
     return Promise.resolve();
 };
