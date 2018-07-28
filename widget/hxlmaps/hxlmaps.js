@@ -593,6 +593,10 @@ hxlmaps.expandLayerConfig = function(config, source) {
         if (!config.adminLevel) {
             config.adminLevel = hxlmaps.guessAdminLevelFromHXL(source);
         }
+    } else if (config.type == 'points') {
+        if (!config.style) {
+            config.style = hxlmaps.guessPointsStyleFromHXL(source);
+        }
     }
 
     return config;
@@ -632,6 +636,24 @@ hxlmaps.guessAdminLevelFromHXL = function(source) {
     }
     console.error("No geocodes found in HXL");
     return null;
+};
+
+
+/**
+ * Guess the style for a points layer, if needed
+ * 0..100 rows: individual markers
+ * 101..1000 rows: cluster markers
+ * 1001+: heat map
+ */
+hxlmaps.guessPointsStyleFromHXL = function(source) {
+    var rowCount = source.rawData.length;
+    if (rowCount > 1000) {
+        return 'heat';
+    } else if (rowCount > 100) {
+        return 'cluster';
+    } else {
+        return 'marker';
+    }
 };
 
 
