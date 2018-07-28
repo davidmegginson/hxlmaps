@@ -15,7 +15,7 @@ var demoConfig = {
             name: "ACLED conflict heat map",
             url: "https://data.humdata.org/dataset/acled-data-for-mali",
             unit: "incidents",
-            type: "heat"
+            style: "heat"
         },
         {
             name: "Mali 3W",

@@ -231,8 +231,6 @@ hxlmaps.Layer.prototype.load = function () {
             // return the appropriate Leaflet loading promise
             if (this.config.type == "points") {
                 return this.loadPoints();
-            } else if (this.config.type == "heat") {
-                return this.loadHeat();
             } else if (this.config.type == "areas") {
                 return this.loadAreas();
             } else {
@@ -252,7 +250,9 @@ hxlmaps.Layer.prototype.load = function () {
 hxlmaps.Layer.prototype.loadPoints = function () {
     var layerGroup;
 
-    if (this.config.style == 'cluster') {
+    if (this.config.style == 'heat') {
+        return this.loadHeat();
+    } else if (this.config.style == 'cluster') {
         layerGroup = L.markerClusterGroup();
         layerGroup.addTo(this.leafletLayer);
     } else {
@@ -586,8 +586,6 @@ hxlmaps.expandLayerConfig = function(config, source) {
         }
     }
 
-    console.log("Expanded", config);
-    
     return config;
 };
 
