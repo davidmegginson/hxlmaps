@@ -4,8 +4,10 @@
  * @global
  * @namespace
  */
-var hxlmaps = {
-};
+var hxlmaps;
+if (typeof(hxlmaps) == 'undefined') {
+    hxlmaps = {};
+}
 
 
 
@@ -225,7 +227,7 @@ hxlmaps.Layer.prototype.load = function () {
     if (this.config.url) {
         return hxlmaps.loadHXL(this.config.url).then((source) => {
             this.source = source;
-            this.setType();
+            this.config = hxlmaps.expandLayerConfig(this.config, this.source);
             // return the appropriate Leaflet loading promise
             if (this.config.type == "points") {
                 return this.loadPoints();
@@ -250,7 +252,7 @@ hxlmaps.Layer.prototype.load = function () {
 hxlmaps.Layer.prototype.loadPoints = function () {
     var layerGroup;
 
-    if (this.config.cluster) {
+    if (this.config.style == 'cluster') {
         layerGroup = L.markerClusterGroup();
         layerGroup.addTo(this.leafletLayer);
     } else {
@@ -366,7 +368,7 @@ hxlmaps.Layer.prototype.loadAreas = function () {
             }
         }
     } else {
-        this.config.aggregateType = count;
+        this.config.aggregateType = 'count';
         if (!this.config.legend) {
             if (this.config.unit) {
                 this.config.legend = "Number of " + this.config.unit;
@@ -375,7 +377,6 @@ hxlmaps.Layer.prototype.loadAreas = function () {
             }
         }
     }
-
     
     this.adminInfo = hxlmaps.cods.itosAdminInfo[this.config.adminLevel];
     this.source = this.source.count(
@@ -451,39 +452,6 @@ hxlmaps.Layer.prototype.loadGeoJSON = function () {
         });
     });
     return Promise.all(promises); // return a promise that won't complete until all others are done
-};
-
-
-/**
- * Guess what type of a layer to make.
- * Sets the type (and adminLevel) in this.config
- */
-hxlmaps.Layer.prototype.setType = function () {
-    if (this.config.type) {
-        return;
-    } else if (!this.source) {
-        console.error("HXL source not loaded yet");
-        return undefined;
-    } else {
-        var columns = this.source.columns;
-        if (hxl.matchList("#geo+lat", columns) && hxl.matchList("#geo+lon", columns)) {
-            this.config.type = "points";
-        } else {
-            var patterns = ["#adm5", "#adm4", "#adm3", "#adm2", "#adm1", "#country"];
-            for (var i = 0; i < patterns.length; i++) {
-                if (hxl.matchList(patterns[i], columns)) {
-                    if (!this.config.adminLevel) {
-                        this.config.adminLevel = patterns[i];
-                    }
-                    this.config.type = "areas";
-                    break;
-                }
-            }
-        }
-    }
-    if (!this.config.type) {
-        console.error("Cannot guess HXL layer type from hashtags");
-    }
 };
 
 
@@ -592,6 +560,107 @@ hxlmaps.Layer.prototype.makeAreaStyle = function (feature) {
 
 };
 
+
+////////////////////////////////////////////////////////////////////////
+// HXL heuristics (to guess missing config values
+////////////////////////////////////////////////////////////////////////
+
+/**
+ * Administrative levels we expect to find (no attributes)
+ */
+hxlmaps.adminPatterns = ["#adm5", "#adm4", "#adm3", "#adm2", "#adm1", "#country"];
+
+
+/**
+ * Fill in a layer config as needed.
+ */
+hxlmaps.expandLayerConfig = function(config, source) {
+
+    if (!config.type) {
+        config.type = hxlmaps.guessTypeFromHXL(source);
+    }
+
+    if (config.type == 'area') {
+        if (!config.adminLevel) {
+            config.adminLevel = hxlmaps.guessAdminLevelFromHXL(source);
+        }
+    }
+
+    console.log("Expanded", config);
+    
+    return config;
+};
+
+
+/**
+ * Guess the type, if needed.
+ */
+hxlmaps.guessTypeFromHXL = function (source) {
+    var columns = source.columns;
+    if (hxl.matchList("#geo+lat", columns) && hxl.matchList("#geo+lon", columns)) {
+        return 'points';
+    } else {
+        var patterns = hxlmaps.adminPatterns;
+        for (var i = 0; i < hxlmaps.adminPatterns.length; i++) {
+            if (hxl.matchList(hxlmaps.adminPatterns[i], columns)) {
+                return 'areas';
+            }
+        }
+    }
+    console.error("Cannot guess HXL layer type from hashtags");
+    return null;
+};
+
+
+/**
+ * Guess the admin level, if needed.
+ */
+hxlmaps.guessAdminLevelFromHXL = function(source) {
+    var columns = source.columns;
+    for (var i = 0; i < hxlmaps.adminPatterns.length; i++) {
+        var pattern = hxlmaps.adminPatterns[i];
+        if (hxl.matchList(pattern + "+code", columns)) {
+            return pattern;
+        }
+    }
+    console.error("No geocodes found in HXL");
+    return null;
+};
+
+
+/**
+ * Parse a color map into a more verbose format.
+ * Will optionally convert each entry from the succinct version to the verbose version.
+ * Also sorts the map for good measure.
+ * @param {object} map - the colour map to process
+ * @returns - a verbose color map for internal use
+ */
+hxlmaps.parseColorMap = function(map) {
+    for (var i = 0; i < map.length; i++) {
+        var entry = map[i];
+        if (Array.isArray(entry)) {
+            if (entry.length != 2) {
+                console.error("Malformed colour map entry", entry);
+                break;
+            }
+            result = entry[1].trim().toUpperCase().match(/^#([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})$/);
+            if (result) {
+                map[i] = {
+                    percentage: entry[0],
+                    color: {
+                        r: parseInt("0x" + result[1]),
+                        g: parseInt("0x" + result[2]),
+                        b: parseInt("0x" + result[3]),
+                    }
+                };
+            } else {
+                console.error("Bad colour specification", entry[1]);
+            }
+        }
+    }
+    return map.sort((a, b) => a.percentage - b.percentage);
+};
+
 
 
 ////////////////////////////////////////////////////////////////////////
@@ -629,40 +698,6 @@ hxlmaps.el = function(name, atts, content, isHTML) {
         }
     }
     return node;
-};
-
-
-/**
- * Parse a color map into a more verbose format.
- * Will optionally convert each entry from the succinct version to the verbose version.
- * Also sorts the map for good measure.
- * @param {object} map - the colour map to process
- * @returns - a verbose color map for internal use
- */
-hxlmaps.parseColorMap = function(map) {
-    for (var i = 0; i < map.length; i++) {
-        var entry = map[i];
-        if (Array.isArray(entry)) {
-            if (entry.length != 2) {
-                console.error("Malformed colour map entry", entry);
-                break;
-            }
-            result = entry[1].trim().toUpperCase().match(/^#([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})$/);
-            if (result) {
-                map[i] = {
-                    percentage: entry[0],
-                    color: {
-                        r: parseInt("0x" + result[1]),
-                        g: parseInt("0x" + result[2]),
-                        b: parseInt("0x" + result[3]),
-                    }
-                };
-            } else {
-                console.error("Bad colour specification", entry[1]);
-            }
-        }
-    }
-    return map.sort((a, b) => a.percentage - b.percentage);
 };
 
 
