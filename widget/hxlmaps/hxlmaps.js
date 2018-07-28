@@ -228,6 +228,7 @@ hxlmaps.Layer.prototype.load = function () {
         return hxlmaps.loadHXL(this.config.url).then((source) => {
             this.source = source;
             this.config = hxlmaps.expandLayerConfig(this.config, this.source);
+            
             // return the appropriate Leaflet loading promise
             if (this.config.type == "points") {
                 return this.loadPoints();
@@ -333,68 +334,18 @@ hxlmaps.Layer.prototype.loadHeat = function () {
  */
 hxlmaps.Layer.prototype.loadAreas = function () {
 
-    function findColumn(patterns, source) {
-        for (var i = 0; i < patterns.length; i++) {
-            var pattern = hxl.classes.TagPattern.parse(patterns[i]);
-            for (var j = 0; j < source.columns.length; j++) {
-                var column = source.columns[j];
-                if (pattern.match(column)) {
-                    return column;
-                }
-            }
-        }
-        return null;
-    }
-    
-    if (!this.config.colorMap) {
-        this.config.colorMap = [
-            { percentage: 0.0, color: { r: 0x80, g: 0xd0, b: 0xc7 } },
-            { percentage: 1.0, color: { r: 0x13, g: 0x54, b: 0x7a } }
-        ];
-    }
-    this.config.colorMap = hxlmaps.parseColorMap(this.config.colorMap);
+    this.colorMap = hxlmaps.parseColorMap(this.config.colorMap);
 
-    if (this.config.hashtag) {
-        var column = findColumn(
-            [this.config.hashtag],
-            this.source
-        );
-    } else {
-        var column = findColumn(
-            ["#reached", "#targeted", "#inneed", "#affected", "#population", "#value", "#indicator+num"],
-            this.source
-        );
-    }
-
-    if (column) {
-        this.config.aggregateType = "sum";
-        this.config.aggregateColumn = column.displayTag + "!";
-        if (!this.config.legend) {
-            if (column.header) {
-                this.config.legend = column.header;
-            } else {
-                this.config.legend = column.displayTag;
-            }
-        }
-    } else {
-        this.config.aggregateType = 'count';
-        if (!this.config.legend) {
-            if (this.config.unit) {
-                this.config.legend = "Number of " + this.config.unit;
-            } else {
-                this.config.legend = "Number of data rows";
-            }
-        }
-    }
-    
     this.adminInfo = hxlmaps.cods.itosAdminInfo[this.config.adminLevel];
+
+    // aggregate the data (count and sum; we'll choose later)
     this.source = this.source.count(
         [this.config.adminLevel + "+name", this.config.adminLevel + "+code"],
-        this.config.aggregateColumn
+        this.config.hashtag
     );
 
-    // get the maximum value if we don't already have it
-    if (this.config.aggregateType == "sum") {
+    // get the min/max values
+    if (this.config.aggregate == "sum") {
         this.minValue = 0 + this.source.getMin("#*+sum");
         this.maxValue = 0 + this.source.getMax("#*+sum");
     } else {
@@ -511,7 +462,7 @@ hxlmaps.Layer.prototype.addAreaUI = function (feature, layer) {
         var row = hxlmaps.cods.fuzzyPcodeLookup(pcode, this.hxlPcodeMap);
         if (row) {
             var name = row.get('#*+name');
-            if (this.config.aggregateType == "sum") {
+            if (this.config.aggregate == "sum") {
                 var count = row.get("#*+sum");
             } else {
                 var count = row.get('#meta+count');
@@ -542,13 +493,13 @@ hxlmaps.Layer.prototype.makeAreaStyle = function (feature) {
     if (pcode) {
         var row = hxlmaps.cods.fuzzyPcodeLookup(pcode, this.hxlPcodeMap);
         if (row) {
-            if (this.config.aggregateType == "sum") {
+            if (this.config.aggregate == "sum") {
                 var count = 0 + row.get("#*+sum");
             } else {
                 var count = 0 + row.get('#meta+count');
             }
             var percentage = count / this.maxValue;
-            var color = hxlmaps.genColor(percentage, this.config.colorMap);
+            var color = hxlmaps.genColor(percentage, this.colorMap);
             return {
                 stroke: false, // FIXME take from config
                 color: color
@@ -569,6 +520,7 @@ hxlmaps.Layer.prototype.makeAreaStyle = function (feature) {
 
 };
 
+
 
 ////////////////////////////////////////////////////////////////////////
 // HXL heuristics (to guess missing config values
@@ -578,6 +530,8 @@ hxlmaps.Layer.prototype.makeAreaStyle = function (feature) {
  * Administrative levels we expect to find (no attributes)
  */
 hxlmaps.adminPatterns = ["#adm5", "#adm4", "#adm3", "#adm2", "#adm1", "#country"];
+
+hxlmaps.aggregateTagPatterns = ["#reached", "#targeted", "#inneed", "#affected", "#population", "#value", "#*+num"],
 
 
 /**
@@ -589,13 +543,44 @@ hxlmaps.expandLayerConfig = function(config, source) {
         config.type = hxlmaps.guessTypeFromHXL(source);
     }
 
-    if (config.type == 'area') {
+    if (config.type == 'areas') {
         if (!config.adminLevel) {
             config.adminLevel = hxlmaps.guessAdminLevelFromHXL(source);
+        }
+        if (!config.colorMap) {
+            config.colorMap = [
+                [0.0, '#80d0c7'],
+                [1.0, '#13547a']
+            ];
+        }
+        if (config.aggregate != "count")  {
+            var column = hxlmaps.guessAggregateColumnFromHXL(source, config.hashtag);
+            if (column) {
+                config.aggregate = "sum";
+                if (!config.hashtag) {
+                    config.hashtag = column.displayTag + '!';
+                }
+                if (!config.legend) {
+                    if (column.header) {
+                        config.legend = column.header;
+                    } else {
+                        config.legend = column.displayTag;
+                    }
+                }
+            } else {
+                config.aggregate = "count";
+            }
+        }
+        if (config.aggregate == 'count' && !config.legend) {
+            var unit = config.unit || "rows";
+            config.legend = "Number of " + unit;
         }
     } else if (config.type == 'points') {
         if (!config.style) {
             config.style = hxlmaps.guessPointsStyleFromHXL(source);
+        }
+        if (!config.legend) {
+            config.legend = config.unit || "Locations";
         }
     }
 
@@ -653,6 +638,41 @@ hxlmaps.guessPointsStyleFromHXL = function(source) {
         return 'cluster';
     } else {
         return 'marker';
+    }
+};
+
+
+/**
+ * Guess the aggregate hashtag, if needed.
+ */
+hxlmaps.guessAggregateColumnFromHXL = function(source, hashtag) {
+
+    function findColumn(patterns, source) {
+        for (var i = 0; i < patterns.length; i++) {
+            var pattern = hxl.classes.TagPattern.parse(patterns[i]);
+            for (var j = 0; j < source.columns.length; j++) {
+                var column = source.columns[j];
+                if (pattern.match(column)) {
+                    return column;
+                }
+            }
+        }
+        return null;
+    }
+    
+    if (hashtag) {
+        var column = findColumn([hashtag], source);
+    } else {
+        var column = findColumn(hxlmaps.aggregateTagPatterns, source);
+    }
+
+    if (column) {
+        return column;
+    } else {
+        if (hashtag) {
+            console.error("No matching aggregation column", hashtag);
+        }
+        return null;
     }
 };
 
