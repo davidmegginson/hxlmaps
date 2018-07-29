@@ -13,7 +13,7 @@ window.onload = function () {
         jsonField.value = jsonString;
     }
         
-    form.onsubmit = function () {
+    window.onsubmit = function () {
         var titleNode = document.getElementById('map-title');
         var linkNode = document.getElementById('map-link');
         try {
