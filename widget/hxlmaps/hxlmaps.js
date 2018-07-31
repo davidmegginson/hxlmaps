@@ -226,17 +226,24 @@ hxlmaps.Layer.prototype.load = function () {
 
     if (this.config.url) {
         return hxlmaps.loadHXL(this.config.url).then((source) => {
+            var promise;
             this.source = source;
             this.config = hxlmaps.expandLayerConfig(this.config, this.source);
             
             // return the appropriate Leaflet loading promise
             if (this.config.type == "points") {
-                return this.loadPoints();
+                promise = this.loadPoints();
             } else if (this.config.type == "areas") {
-                return this.loadAreas();
+                promise = this.loadAreas();
             } else {
                 return Promise.reject("Bad layer type " + this.config.type);
             }
+            return promise.then(() => {
+                if (this.legend && this.leafletLayer) {
+                    this.leafletLayer.on('add', ev => this.legend.addTo(this.map));
+                    this.leafletLayer.on('remove', ev => this.legend.remove());
+                }
+            });
         });
     } else {
         return Promise.reject("No HXL url for data layer: " + this.config.name);
@@ -294,6 +301,10 @@ hxlmaps.Layer.prototype.loadPoints = function () {
 
     });
 
+    this.legend = hxlmaps.controls.legendControl({
+        layerConfig: this.config,
+    });
+
     this.extendBounds(points);
 
     return Promise.resolve();
@@ -324,6 +335,10 @@ hxlmaps.Layer.prototype.loadHeat = function () {
         minOpacity: 0.4
     }).addTo(this.leafletLayer);
 
+    this.legend = hxlmaps.controls.legendControl({
+        layerConfig: this.config,
+    });
+    
     return Promise.resolve(); // empty promise (resolves instantly)
 };
 
@@ -385,9 +400,6 @@ hxlmaps.Layer.prototype.loadAreas = function () {
             max: this.maxValue
         });
 
-        // show and hide the legend with the layer
-        this.leafletLayer.on('add', ev => this.legend.addTo(this.map));
-        this.leafletLayer.on('remove', ev => this.legend.remove());
     });
 
 };
@@ -573,14 +585,20 @@ hxlmaps.expandLayerConfig = function(config, source) {
         }
         if (config.aggregate == 'count' && !config.legend) {
             var unit = config.unit || "rows";
-            config.legend = "Number of " + unit;
+            config.legend = unit[0].toUpperCase() + unit.slice(1);
         }
     } else if (config.type == 'points') {
         if (!config.style) {
             config.style = hxlmaps.guessPointsStyleFromHXL(source);
         }
         if (!config.legend) {
-            config.legend = config.unit || "Locations";
+            if (config.unit) {
+                config.legend = config.unit[0].toUpperCase() + config.unit.slice(1);
+            } else if (config.name) {
+                config.legend = config.name;
+            } else {
+                config.legend = "Locations";
+            }
         }
     }
 
@@ -863,33 +881,42 @@ hxlmaps.controls.LegendControl = L.Control.extend({
     onAdd: function (map) {
         var node = hxlmaps.el('div', {class: 'info legend map-legend'});
 
-        // set the transparency to match the map
-        var alpha = this.options.layerConfig.alpha;
-        if (!alpha) {
-            alpha = 0.5; // FIXME take from config
-        }
-
         // show what's being counted
         node.appendChild(hxlmaps.el('div', {class: 'unit'}, this.options.layerConfig.legend));
 
-        // generate a gradient from 0-100% in 5% steps
-        for (var percentage = 0; percentage <= 1.0; percentage += 0.05) {
-            var color = hxlmaps.genColor(percentage, this.options.layerConfig.colorMap, alpha);
-            node.appendChild(hxlmaps.el(
-                'span',
-                {
-                    class: 'color',
-                    style: 'background:' + color
-                },
-                "&nbsp",
-                true
-            ));
+        var type = this.options.layerConfig.type;
+        if (type == "areas") {
+            // assume choropleth for now
+
+            // set the transparency to match the map
+            var alpha = this.options.layerConfig.alpha;
+            if (!alpha) {
+                alpha = 0.5; // FIXME take from config
+            }
+
+            // generate a gradient from 0-100% in 5% steps
+            for (var percentage = 0; percentage <= 1.0; percentage += 0.05) {
+                var color = hxlmaps.genColor(percentage, this.options.layerConfig.colorMap, alpha);
+                node.appendChild(hxlmaps.el(
+                    'span',
+                    {
+                        class: 'color',
+                        style: 'background:' + color
+                    },
+                    "&nbsp",
+                    true
+                ));
+            }
+
+            // add the minimum and maximum absolute values
+            node.appendChild(hxlmaps.el('br')); // FIXME: blech
+            node.appendChild(hxlmaps.el('div', {class: 'min'}, hxlmaps.numfmt(this.options.min)));
+            node.appendChild(hxlmaps.el('div', {class: 'max'}, hxlmaps.numfmt(this.options.max)));
         }
 
-        // add the minimum and maximum absolute values
-        node.appendChild(hxlmaps.el('br')); // FIXME: blech
-        node.appendChild(hxlmaps.el('div', {class: 'min'}, hxlmaps.numfmt(this.options.min)));
-        node.appendChild(hxlmaps.el('div', {class: 'max'}, hxlmaps.numfmt(this.options.max)));
+        else if (type == "points") {
+            node.appendChild(hxlmaps.el('p', {}, 'points!'));
+        }
         
         return node;
     }
