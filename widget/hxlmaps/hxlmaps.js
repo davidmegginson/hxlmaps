@@ -70,7 +70,7 @@ hxlmaps.Map = function(mapId, mapConfig) {
                 'pane': 'tilePane'
             });
             mapConfig.codLayers.forEach(codConfig => {
-                var promise = hxlmaps.cods.loadItosLevel(codConfig.country, codConfig.level).then(
+                var promise = hxlmaps.data.loadItosLevel(codConfig.country, codConfig.level).then(
                     json => {
                         this.codLayerGroup.addLayer(L.geoJSON(json, {
                             style: () => {
@@ -225,7 +225,7 @@ hxlmaps.Layer.prototype.load = function () {
     this.leafletLayer = L.layerGroup();
 
     if (this.config.url) {
-        return hxlmaps.loadHXL(this.config.url).then((source) => {
+        return hxlmaps.data.loadHXL(this.config.url).then((source) => {
             var promise;
             this.source = source;
             this.config = hxlmaps.expandLayerConfig(this.config, this.source);
@@ -351,7 +351,7 @@ hxlmaps.Layer.prototype.loadAreas = function () {
 
     this.colorMap = hxlmaps.parseColorMap(this.config.colorMap);
 
-    this.adminInfo = hxlmaps.cods.itosAdminInfo[this.config.adminLevel];
+    this.adminInfo = hxlmaps.data.itosAdminInfo[this.config.adminLevel];
 
     // aggregate the data (count and sum; we'll choose later)
     this.source = this.source.count(
@@ -413,7 +413,7 @@ hxlmaps.Layer.prototype.loadGeoJSON = function () {
     var countries = Object.keys(this.countryMap);
     var promises = []
     countries.forEach((countryCode) => {
-        var promise = hxlmaps.cods.loadItosLevel(countryCode, this.config.adminLevel);
+        var promise = hxlmaps.data.loadItosLevel(countryCode, this.config.adminLevel);
         promises.push(promise.then((geojson) => {
             this.countryMap[countryCode]["geojson"] = geojson;
         }));
@@ -441,7 +441,7 @@ hxlmaps.Layer.prototype.setCountries = function () {
             if (!pcode) {
                 console.info("No Pcode in row", row);
             } else {
-                var countryCode = hxlmaps.cods.getPcodeCountry(pcode);
+                var countryCode = hxlmaps.data.getPcodeCountry(pcode);
                 if (countryCode) {
                     this.countryMap[countryCode] = {};
                 } else {
@@ -471,7 +471,7 @@ hxlmaps.Layer.prototype.extendBounds = function (geo) {
 hxlmaps.Layer.prototype.addAreaUI = function (feature, layer) {
     var pcode = feature.properties[this.adminInfo.property];
     if (pcode) {
-        var row = hxlmaps.cods.fuzzyPcodeLookup(pcode, this.hxlPcodeMap);
+        var row = hxlmaps.data.fuzzyPcodeLookup(pcode, this.hxlPcodeMap);
         if (row) {
             var name = row.get('#*+name');
             if (this.config.aggregate == "sum") {
@@ -503,7 +503,7 @@ hxlmaps.Layer.prototype.makeAreaStyle = function (feature) {
     // figure out the weighting of this area, and calculate a color
     var pcode = feature.properties[this.adminInfo.property];
     if (pcode) {
-        var row = hxlmaps.cods.fuzzyPcodeLookup(pcode, this.hxlPcodeMap);
+        var row = hxlmaps.data.fuzzyPcodeLookup(pcode, this.hxlPcodeMap);
         if (row) {
             if (this.config.aggregate == "sum") {
                 var count = 0 + row.get("#*+sum");
@@ -765,26 +765,6 @@ hxlmaps.el = function(name, atts, content, isHTML) {
         }
     }
     return node;
-};
-
-
-/**
- * Load the HXL data for the layer.
- * @returns a promise that resolves when the HXL data is loaded.
- */
-hxlmaps.loadHXL = function(url) {
-    // wrap in an ES6 promise
-    return new Promise((resolve, reject) => {
-        hxl.proxy(
-            url,
-            (source) => {
-                resolve(source);
-            },
-            (xhr) => {
-                reject("Unable to read HXL dataset: " + xhr.statusText);
-            }
-        );
-    });
 };
 
 
