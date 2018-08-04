@@ -1,7 +1,16 @@
+////////////////////////////////////////////////////////////////////////
+// External data functions for hxlmaps
+//
+// The functions in this module have nothing to do with rendering,
+// and can be loaded independently.
+////////////////////////////////////////////////////////////////////////
+
+if (typeof(hxlmaps) == 'undefined') {
+    hxlmaps = {};
+}
+
 /**
  * Functions for loading data.
- * Includes promise caching.
- * Loading always returns a promise.
  * @global
  * @namespace
  */
@@ -12,12 +21,17 @@ hxlmaps.data = {
 };
 
 
+
+////////////////////////////////////////////////////////////////////////
+// Data-loading functions
+////////////////////////////////////////////////////////////////////////
+
 /**
  * Load HXL data from a URL.
  * Uses the HXL Proxy as an intermediary, via libhxl.js
- * Caches so that there will never be more than one promise created for any source URL.
+ * Caches promises to avoid double-loading.
  * @param {string} url - the URL of the HXL data to load.
- * @returns {Promise} - an ES6 promise that resolves when the HXL data is loaded.
+ * @returns {Promise} - the ES6 promise for loading the HXL data.
  */
 hxlmaps.data.loadHXL = function(url) {
 
@@ -44,16 +58,119 @@ hxlmaps.data.loadHXL = function(url) {
 
 
 /**
- * Determine a country for a P-code.
+ * Load list of admin levels for a country.
+ * Caches promises to avoid double-loading.
+ * @param {string} countryCode - an ISO3 country code.
+ * @returns {Promise} - the ES6 promise for loading the JSON data.
+ */
+hxlmaps.data.loadItosCountryInfo = function(countryCode) {
+
+    // check if promise is already cached
+    if (this.countryInfoCache[countryCode]) {
+        return this.countryInfoCache[countryCode];
+    }
+
+    // need to create a new promise to load it
+    var urlPattern = "https://gistmaps.itos.uga.edu/arcgis/rest/services/COD_External/{{country}}_pcode/MapServer?f=json";
+    var url = urlPattern.replace("{{country}}", countryCode.toUpperCase());
+    var promise = this.getJSON(url);
+
+    // add to cache so that we don't load the country info twice
+    this.countryInfoCache[countryCode] = promise;
+    
+    return promise;
+};
+
+
+/**
+ * Load GeoJSON from iTOS
+ * Caches promises to avoid double-loading.
+ * @param {string} countryCode - an ISO3 country code
+ * @param {string} adminLevel - a HXL admin level (e.g. #country, #adm3)
+ * @returns {Promise} - the ES6 promise for loading the GeoJSON data.
+ */
+hxlmaps.data.loadItosLevel = function (countryCode, adminLevel) {
+
+    // check if promise is already cached
+    var cacheKey = [countryCode, adminLevel];
+    if (this.geoJsonCache[cacheKey]) {
+        return this.geoJsonCache[cacheKey];
+    }
+
+    // need to create a new promise to load it
+    var adminInfo = this.itosAdminInfo[adminLevel];
+    if (!adminInfo) {
+        return Promise.reject("Unrecognised admin level: " + adminLevel);
+    }
+    
+    var promise = this.loadItosCountryInfo(countryCode).then(countryInfo => {
+
+        // iTOS still returns 200 on error, so check the JSON before proceeding
+        if (countryInfo.error) {
+            return Promise.reject(countryInfo.error.message);
+        }
+        
+        var levelId;
+        for (var i = 0; i < countryInfo.layers.length; i++) {
+            layerInfo = countryInfo.layers[i];
+            if (adminInfo.layerName == layerInfo.name) {
+                levelId = layerInfo.id;
+                break;
+            }
+        }
+        var urlPattern = "https://gistmaps.itos.uga.edu/arcgis/rest/services/COD_External/{{country}}_pcode/MapServer/{{level}}/query?where=1%3D1&outFields=*&f=geojson";
+        var url = urlPattern.replace("{{country}}", countryCode.toUpperCase());
+        url = url.replace("{{level}}", levelId);
+        return this.getJSON(url);
+    });
+
+    this.geoJsonCache[cacheKey] = promise;
+    return promise;
+};
+
+
+/**
+ * Low-level AJAX JSON-loading function.
+ * This function does not include caching.
+ * @param {string} url - address of the JSON to load.
+ * @returns {Promise} - an ES6 promise for loading the JSON.
+ */
+hxlmaps.data.getJSON = function (url) {
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("GET", url);
+        xhr.onload = () => {
+            try {
+                var json = JSON.parse(xhr.responseText);
+                resolve(json);
+            } catch (e) {
+                reject(e);
+            }
+        };
+        xhr.onerror = () => {
+            reject(xhr.statusText);
+        };
+        xhr.send();
+    });
+};
+
+
+
+////////////////////////////////////////////////////////////////////////
+// Data-processing functions
+////////////////////////////////////////////////////////////////////////
+
+/**
+ * Guess a country for a P-code.
  * @param pcode: the P-code to look up.
  * @returns: an ISO3 country code, or false on failure.
  */
 hxlmaps.data.getPcodeCountry = function(pcode) {
     var code = pcode.substr(0, 3).toUpperCase();
-    if (hxlmaps.data.iso3map[code]) {
+    if (this.iso3map[code]) {
         return code;
-    } else if (hxlmaps.data.iso2map[code.substr(0, 2)]) {
-        return hxlmaps.data.iso2map[code.substr(0, 2)];
+    } else if (this.iso2map[code.substr(0, 2)]) {
+        return this.iso2map[code.substr(0, 2)];
     } else {
         return false;
     }
@@ -78,7 +195,7 @@ hxlmaps.data.fuzzyPcodeLookup = function(pcode, obj) {
     }
 
     // try swapping iso3 for iso2
-    var iso2 = hxlmaps.data.iso3map[pcode.substr(0, 3)];
+    var iso2 = this.iso3map[pcode.substr(0, 3)];
     if (iso2) {
         newPcode = iso2 + pcode.substr(3);
         if (obj[newPcode]) {
@@ -87,7 +204,7 @@ hxlmaps.data.fuzzyPcodeLookup = function(pcode, obj) {
     }
 
     // try swapping iso2 for iso3
-    var iso3 = hxlmaps.data.iso2map[pcode.substr(0, 2)];
+    var iso3 = this.iso2map[pcode.substr(0, 2)];
     if (iso3) {
         var newPcode = iso3 + pcode.substr(2);
         if (obj[newPcode]) {
@@ -97,101 +214,6 @@ hxlmaps.data.fuzzyPcodeLookup = function(pcode, obj) {
 
     // no joy
     return undefined;
-};
-
-
-/**
- * Load list of admin levels for a country.
- * @param countryCode: an ISO3 country code.
- * @returns: the promise for loading the JSON.
- */
-hxlmaps.data.loadItosCountryInfo = function(countryCode) {
-
-    // check if promise is already cached
-    if (this.countryInfoCache[countryCode]) {
-        return this.countryInfoCache[countryCode];
-    }
-
-    // need to create a new promise to load it
-    var urlPattern = "https://gistmaps.itos.uga.edu/arcgis/rest/services/COD_External/{{country}}_pcode/MapServer?f=json";
-    var url = urlPattern.replace("{{country}}", countryCode.toUpperCase());
-    var promise = hxlmaps.data.getJSON(url);
-
-    // add to cache so that we don't load the country info twice
-    this.countryInfoCache[countryCode] = promise;
-    
-    return promise;
-};
-
-
-/**
- * Load GeoJSON from iTOS
- * @param countryCode: an ISO3 country code
- * @param adminLevel: a HXL admin level (e.g. #country, #adm3)
- * @returns: the promise for loading the GeoJSON.
- */
-hxlmaps.data.loadItosLevel = function (countryCode, adminLevel) {
-
-    // check if promise is already cached
-    var cacheKey = [countryCode, adminLevel];
-    if (this.geoJsonCache[cacheKey]) {
-        return this.geoJsonCache[cacheKey];
-    }
-
-    // need to create a new promise to load it
-    var adminInfo = hxlmaps.data.itosAdminInfo[adminLevel];
-    if (!adminInfo) {
-        return Promise.reject("Unrecognised admin level: " + adminLevel);
-    }
-    
-    var promise = hxlmaps.data.loadItosCountryInfo(countryCode).then(countryInfo => {
-
-        // iTOS still returns 200 on error, so check the JSON before proceeding
-        if (countryInfo.error) {
-            return Promise.reject(countryInfo.error.message);
-        }
-        
-        var levelId;
-        for (var i = 0; i < countryInfo.layers.length; i++) {
-            layerInfo = countryInfo.layers[i];
-            if (adminInfo.layerName == layerInfo.name) {
-                levelId = layerInfo.id;
-                break;
-            }
-        }
-        var urlPattern = "https://gistmaps.itos.uga.edu/arcgis/rest/services/COD_External/{{country}}_pcode/MapServer/{{level}}/query?where=1%3D1&outFields=*&f=geojson";
-        var url = urlPattern.replace("{{country}}", countryCode.toUpperCase());
-        url = url.replace("{{level}}", levelId);
-        return hxlmaps.data.getJSON(url);
-    });
-
-    this.geoJsonCache[cacheKey] = promise;
-    return promise;
-};
-
-
-/**
- * Load JSON.
- * @param url address of the JSON to load
- * @returns a loading promise
- */
-hxlmaps.data.getJSON = function (url) {
-    return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open("GET", url);
-        xhr.onload = () => {
-            try {
-                var json = JSON.parse(xhr.responseText);
-                resolve(json);
-            } catch (e) {
-                reject(e);
-            }
-        };
-        xhr.onerror = () => {
-            reject(xhr.statusText);
-        };
-        xhr.send();
-    });
 };
 
 
