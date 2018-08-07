@@ -14,8 +14,22 @@
     color: rgba(0, 0, 0, 0.5);
 }
 
-.map-legend .unit {
+.map-legend .sidebyside {
+    display: flex;
+    align-items: center;
+}
+
+.map-legend img.icon {
+    height: 1.5em;
+    width: 1.5em;
+}
+
+.map-legend div.unit {
     text-align: center;
+}
+
+.map-legend span.unit {
+    padding-left: .5em;
 }
 
 .map-legend .min {
@@ -29,7 +43,8 @@
 }
 
 .map-legend .color {
+    font-size: 50%;
     display:inline-block;
-    width:.5em;
+    width:1em;
 }
 

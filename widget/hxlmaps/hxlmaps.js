@@ -861,11 +861,12 @@ hxlmaps.controls.LegendControl = L.Control.extend({
     onAdd: function (map) {
         var node = hxlmaps.el('div', {class: 'info legend map-legend'});
 
-        // show what's being counted
-        node.appendChild(hxlmaps.el('div', {class: 'unit'}, this.options.layerConfig.legend));
-
         var type = this.options.layerConfig.type;
+        var style = this.options.layerConfig.style;
         if (type == "areas") {
+            // show what's being counted
+            node.appendChild(hxlmaps.el('div', {class: 'unit'}, this.options.layerConfig.legend));
+
             // assume choropleth for now
 
             // set the transparency to match the map
@@ -895,7 +896,21 @@ hxlmaps.controls.LegendControl = L.Control.extend({
         }
 
         else if (type == "points") {
-            node.appendChild(hxlmaps.el('p', {}, 'points!'));
+            console.log(style);
+            switch (style) {
+            case 'heat':
+                var iconUrl = "hxlmaps/img/heatmap.png";
+                break;
+            default:
+                var iconUrl = "hxlmaps/img/marker.png";
+                break;
+            }
+            var container = node.appendChild(hxlmaps.el('div', { class: "sidebyside" }));
+            container.appendChild(hxlmaps.el('img', {
+                src: iconUrl,
+                class: "icon"
+            }));
+            container.appendChild(hxlmaps.el('span', {class: 'unit'}, this.options.layerConfig.legend));
         }
         
         return node;
